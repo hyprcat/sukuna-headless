@@ -1,0 +1,33 @@
+---
+type Surface = 'canvas' | 'sunken';
+
+interface Props {
+  as?: 'div' | 'section' | 'article';
+  surface?: Surface;
+  feature?: boolean;
+  hover?: boolean;
+  class?: string;
+}
+
+const {
+  as: Tag = 'div',
+  surface = 'canvas',
+  feature = false,
+  hover = false,
+  class: cls = '',
+} = Astro.props as Props;
+
+const className = [
+  'card',
+  surface === 'sunken' ? 'card-sunken' : '',
+  feature ? 'card-feature' : '',
+  hover ? 'card-hover' : '',
+  cls,
+]
+  .filter(Boolean)
+  .join(' ');
+---
+
+<Tag class={className}>
+  <slot />
+</Tag>

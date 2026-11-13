@@ -1,0 +1,453 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import Button from '../components/ui/Button.astro';
+import DataTable from '../components/ui/DataTable.astro';
+import ProgressBar from '../components/ui/ProgressBar.astro';
+import StatusBadge from '../components/ui/StatusBadge.astro';
+import StatTile from '../components/ui/StatTile.astro';
+import Input from '../components/ui/Input.astro';
+import UsersDoodle from '../components/doodles/UsersDoodle.astro';
+import TierConfig from '../components/end-users/TierConfig.astro';
+import search from 'lucide-static/icons/search.svg?raw';
+import plus from 'lucide-static/icons/plus.svg?raw';
+import usersIcon from 'lucide-static/icons/users.svg?raw';
+import userCheck from 'lucide-static/icons/user-check.svg?raw';
+import { gql } from '../lib/graphql';
+import { initial } from '../lib/format';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+
+interface ControlProfile {
+  credits: number;
+  creditGrantPerPeriod: number;
+  runCountLimit: number | null;
+  runCountPeriod: string;
+  runsUsedInPeriod: number;
+  sandboxTimeSeconds: number | null;
+  concurrencyMax: number | null;
+  modelTier: string;
+}
+
+interface EndUserNode {
+  id: string;
+  externalUserId: string;
+  displayName: string;
+  tierLabel: string;
+  isActive: boolean;
+  createdAt: string;
+  runCount: number;
+  metadata: Record<string, unknown> | null;
+  controls: ControlProfile | null;
+}
+
+interface EndUsersPageData {
+  endUsers: { edges: { node: EndUserNode }[] };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const apiUrl = clientApiUrl;
+
+const { data, errors } = await gql<EndUsersPageData>(
+  `query EndUsersPage {
+    endUsers(first: 100) {
+      edges { node {
+        id externalUserId displayName tierLabel
+        isActive createdAt runCount metadata
+        controls {
+          credits creditGrantPerPeriod
+          runCountLimit runCountPeriod runsUsedInPeriod
+          sandboxTimeSeconds concurrencyMax modelTier
+        }
+      } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const users = data?.endUsers?.edges?.map((e) => e.node) ?? [];
+const hasError = !!errors;
+const activeCount = users.filter((u) => u.isActive).length;
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canWrite = canAction(role, Action.END_USERS_WRITE);
+const isNew = Astro.locals.layout === 'new';
+
+function formatSandboxTimeShort(seconds: number | null): string {
+  if (seconds === null || seconds === 0) return '-';
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function capLabel(used: number, limit: number | null): string {
+  if (limit === null) return 'Unlimited';
+  return `${used} / ${limit}`;
+}
+---
+
+<DashboardLayout title="End Users - midsphere" current="end-users">
+  <div id="api-config" data-url={apiUrl} data-ws={wsSlug ?? ''} hidden></div>
+  <div data-can-write={canWrite ? 'true' : 'false'} hidden></div>
+
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && users.length === 0 && (
+      <EmptyState
+        heading="No end users yet"
+        body={`Your app's users. They appear here when <span class="hl">created via the SDK</span> or API.`}
+      >
+        <UsersDoodle size={64} slot="doodle" />
+        {canWrite && (
+          <Button variant="accent" id="invite-eu-empty">
+            <Icon svg={plus} size={16} />
+            Create end user
+          </Button>
+        )}
+      </EmptyState>
+    )
+  }
+
+  {
+    !hasError && users.length > 0 && (
+      <div class="eu-layout">
+        <div class="eu-header">
+          <div>
+            <h1
+              class:list={[
+                isNew ? 'text-2xl' : 'text-xl',
+                'font-semibold tracking-tight text-fg-1',
+              ]}
+            >
+              <span class="hl">End Users</span>
+            </h1>
+            {isNew && (
+              <p class="mt-1 text-sm text-fg-2">Your app's users, and the limits they run under</p>
+            )}
+          </div>
+        </div>
+
+        {isNew ? (
+          <div class="flex flex-wrap gap-3" aria-label="End user statistics">
+            <StatTile label="Active">
+              <Icon svg={userCheck} size={16} slot="icon" />
+              {activeCount.toLocaleString()}
+            </StatTile>
+            <StatTile label="Total end users">
+              <Icon svg={usersIcon} size={16} slot="icon" />
+              {users.length.toLocaleString()}
+            </StatTile>
+          </div>
+        ) : (
+          <div class="eu-stats" aria-label="End user statistics">
+            <span class="eu-stat">{activeCount.toLocaleString()} active</span>
+            <span class="eu-stat-dot" aria-hidden="true">
+              &middot;
+            </span>
+            <span class="eu-stat">{users.length.toLocaleString()} total</span>
+          </div>
+        )}
+
+        <div class="eu-toolbar">
+          <form role="search" class="eu-search">
+            <Icon svg={search} size={16} class="search-icon" />
+            <input
+              type="search"
+              id="eu-search"
+              aria-label="Search end users"
+              placeholder="Search by name or ID..."
+              class="search-input"
+              autocomplete="off"
+            />
+          </form>
+
+          <div class="eu-filters">
+            <select id="eu-tier-filter" class="toolbar-select" aria-label="Filter by tier">
+              <option value="all">Tier: All</option>
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+
+            <div class="filter-pills" aria-label="Filter by status">
+              <button type="button" class="pill pill-active" aria-pressed="true" data-filter="all">
+                All
+              </button>
+              <button type="button" class="pill" aria-pressed="false" data-filter="active">
+                Active
+              </button>
+              <button type="button" class="pill" aria-pressed="false" data-filter="inactive">
+                Inactive
+              </button>
+            </div>
+          </div>
+
+          {canWrite && (
+            <Button variant="accent" id="invite-eu-btn">
+              <Icon svg={plus} size={16} />
+              Create end user
+            </Button>
+          )}
+        </div>
+
+        <DataTable label="End users" class={isNew ? 'card p-2' : ''}>
+          <tr slot="head">
+            <th>User</th>
+            <th>Tier</th>
+            <th>Credits</th>
+            <th>Runs</th>
+            <th>Sandbox time</th>
+            <th>Run cap</th>
+            <th>Concurrency</th>
+            <th>Actions</th>
+          </tr>
+          {users.map((u) => (
+            <tr
+              class="eu-row"
+              data-name={(u.displayName ?? u.externalUserId).toLowerCase()}
+              data-tier={u.tierLabel.toLowerCase()}
+              data-active={u.isActive ? 'true' : 'false'}
+              data-inactive={u.isActive ? 'false' : 'true'}
+            >
+              <td data-label="User">
+                <div class="eu-user-cell">
+                  <span class:list={['avatar', u.isActive ? 'avatar-active' : 'avatar-inactive']}>
+                    {initial(u.displayName || u.externalUserId)}
+                  </span>
+                  <div class="eu-user-info">
+                    <span class="eu-user-name-row">
+                      <span class="eu-user-name">{u.displayName || u.externalUserId}</span>
+                      <StatusBadge status={u.isActive ? 'active' : 'inactive'} />
+                    </span>
+                    <span class="eu-user-id">{u.externalUserId}</span>
+                  </div>
+                </div>
+              </td>
+              <td data-label="Tier">
+                <span
+                  class:list={[
+                    'tier-badge',
+                    u.tierLabel.toLowerCase() === 'free' ? 'tier-free' : 'tier-paid',
+                  ]}
+                >
+                  {u.tierLabel}
+                </span>
+              </td>
+              <td data-label="Credits">
+                {u.controls && u.controls.creditGrantPerPeriod > 0 ? (
+                  <ProgressBar
+                    name="Credits"
+                    value={u.controls.credits}
+                    max={u.controls.creditGrantPerPeriod}
+                    label={`${u.controls.credits} / ${u.controls.creditGrantPerPeriod}`}
+                  />
+                ) : (
+                  <span class="text-sm text-fg-2">{u.controls?.credits ?? 0}</span>
+                )}
+              </td>
+              <td data-label="Runs">{u.runCount}</td>
+              <td data-label="Sandbox time">
+                {formatSandboxTimeShort(u.controls?.sandboxTimeSeconds ?? null)}
+              </td>
+              <td data-label="Run cap">
+                {capLabel(u.controls?.runsUsedInPeriod ?? 0, u.controls?.runCountLimit ?? null)}
+              </td>
+              <td data-label="Concurrency">{u.controls?.concurrencyMax ?? 'Unlimited'}</td>
+              <td data-label="Actions">
+                <a href={`/end-users/${u.id}`} class="link-subtle">
+                  View
+                </a>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+
+        <p class="item-count" id="eu-count" aria-live="polite" aria-atomic="true">
+          Showing {users.length} of {users.length} end users
+        </p>
+
+        <TierConfig />
+      </div>
+    )
+  }
+
+  {
+    canWrite && (
+      <dialog
+        id="dlg-end-user"
+        aria-labelledby="dlg-end-user-title"
+        aria-modal="true"
+        class="m-auto w-full max-w-md rounded-md bg-canvas p-0 shadow-lg backdrop:bg-black/40"
+      >
+        <div class="p-6">
+          <h2 id="dlg-end-user-title" class="text-lg font-medium tracking-tight text-fg-1">
+            Create end user
+          </h2>
+          <p class="mt-1 text-sm text-fg-2">
+            Add the user ID from your app and set the tier they should start on.
+          </p>
+
+          <form
+            id="end-user-form"
+            class="mt-6 flex flex-col gap-5"
+            aria-describedby="end-user-form-error"
+          >
+            <Input
+              id="end-user-external-id"
+              name="externalUserId"
+              label="External user ID"
+              placeholder="user_8a392"
+              required
+              autocomplete="off"
+            />
+
+            <Input
+              id="end-user-display-name"
+              name="displayName"
+              label="Display name"
+              placeholder="Sarah Chen"
+              autocomplete="off"
+            />
+
+            <div class="flex flex-col gap-2">
+              <label for="end-user-tier" class="text-sm font-medium text-fg-1">
+                Tier
+              </label>
+              <select id="end-user-tier" name="tierLabel" class="input">
+                <option value="Free">Free</option>
+                <option value="Pro">Pro</option>
+                <option value="Enterprise">Enterprise</option>
+              </select>
+            </div>
+
+            <div
+              id="end-user-form-error"
+              class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+              role="alert"
+            />
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <Button variant="ghost" id="btn-cancel-end-user">
+                Cancel
+              </Button>
+              <Button variant="accent" type="submit" id="btn-submit-end-user">
+                Create end user
+              </Button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .eu-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+
+  .eu-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ms-space-4);
+  }
+
+  /* Stats bar */
+  .eu-stats {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+  }
+
+  .eu-stat-dot {
+    color: var(--ms-fg-3);
+  }
+
+  /* Toolbar */
+  .eu-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+    flex-wrap: wrap;
+  }
+
+  .eu-search {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .eu-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  /* User cell */
+  .eu-user-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  .eu-user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .eu-user-name-row {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    min-width: 0;
+  }
+
+  .eu-user-name {
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .eu-user-id {
+    font-size: 0.6875rem;
+    color: var(--ms-fg-3);
+    font-family: var(--ms-font-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Mobile adjustments */
+  @media (max-width: 639px) {
+    .eu-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .eu-filters {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/end-users.js"></script>

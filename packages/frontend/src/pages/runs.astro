@@ -1,0 +1,205 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+import StatTile from '../components/ui/StatTile.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import Button from '../components/ui/Button.astro';
+import RunbookDoodle from '../components/doodles/RunbookDoodle.astro';
+import RunsTable from '../components/runs/RunsTable.astro';
+import { gql } from '../lib/graphql';
+import { timeAgo, formatDuration } from '../lib/format';
+import type { RunNode } from '../lib/types';
+import search from 'lucide-static/icons/search.svg?raw';
+import activity from 'lucide-static/icons/activity.svg?raw';
+import play from 'lucide-static/icons/play.svg?raw';
+import circleX from 'lucide-static/icons/circle-x.svg?raw';
+import dollarSign from 'lucide-static/icons/dollar-sign.svg?raw';
+import bot from 'lucide-static/icons/bot.svg?raw';
+import userPlus from 'lucide-static/icons/user-plus.svg?raw';
+
+interface RunsData {
+  runs: {
+    totalCount: number;
+    edges: { node: RunNode }[];
+  };
+}
+
+const layout = Astro.locals.layout;
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+
+const { data, errors } = await gql<RunsData>(
+  `query Runs {
+    runs(first: 100) {
+      totalCount
+      edges { node {
+        id runUid status agentName endUserIdExternal
+        promptPreview totalCost totalTokens
+        startedAt finishedAt createdAt
+        rating { score }
+      } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+// totalCost arrives as a string (GraphQL Decimal scalar); coerce to number here.
+const runs =
+  data?.runs?.edges?.map((e) => ({ ...e.node, totalCost: Number(e.node.totalCost) })) ?? [];
+const totalCount = data?.runs?.totalCount ?? runs.length;
+const hasError = !!errors;
+
+const runningCount = runs.filter((r) => r.status === 'RUNNING').length;
+const failedCount = runs.filter((r) => r.status === 'FAILED').length;
+const avgCost = runs.length > 0 ? runs.reduce((sum, r) => sum + r.totalCost, 0) / runs.length : 0;
+
+const statuses = ['all', 'queued', 'running', 'finished', 'failed', 'cancelled'] as const;
+---
+
+<DashboardLayout title="Runs · midsphere" current="runs">
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && runs.length === 0 && (
+      <EmptyState
+        heading="No runs yet"
+        body={`Your agent hasn't run yet. <span class="hl">Create an agent</span> or add an end user to get started.`}
+      >
+        <RunbookDoodle size={64} slot="doodle" />
+        <Button variant="accent" href="/agents/new">
+          <Icon svg={bot} size={16} />
+          Create agent
+        </Button>
+        <Button variant="secondary" href="/end-users">
+          <Icon svg={userPlus} size={16} />
+          View end users
+        </Button>
+      </EmptyState>
+    )
+  }
+
+  {
+    !hasError && runs.length > 0 && (
+      <div class="runs-layout">
+        <div class="runs-header">
+          <div>
+            <h1 class="text-xl font-semibold tracking-tight text-fg-1">
+              Run <span class="hl">history</span>
+            </h1>
+            {layout === 'new' && (
+              <p class="mt-1 text-sm text-fg-2">
+                Every run your agents have started, newest first.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div class="runs-stats" aria-label="Run statistics">
+          <StatTile label="Total runs">
+            <Icon svg={activity} size={16} slot="icon" />
+            {totalCount.toLocaleString()}
+          </StatTile>
+          <StatTile label="Running">
+            <Icon svg={play} size={16} slot="icon" />
+            {runningCount.toLocaleString()}
+          </StatTile>
+          <StatTile label="Failed">
+            <Icon svg={circleX} size={16} slot="icon" />
+            {failedCount.toLocaleString()}
+          </StatTile>
+          <StatTile label="Avg cost">
+            <Icon svg={dollarSign} size={16} slot="icon" />${avgCost.toFixed(3)}
+          </StatTile>
+        </div>
+
+        <div class:list={['runs-toolbar', layout === 'new' && 'card']}>
+          <form role="search" class="runs-search">
+            <Icon svg={search} size={16} class="search-icon" />
+            <input
+              type="search"
+              id="runs-search"
+              aria-label="Search runs"
+              placeholder="Search by run ID, agent, or prompt..."
+              class="search-input"
+              autocomplete="off"
+            />
+          </form>
+
+          <div class="filter-pills" role="radiogroup" aria-label="Filter by status">
+            {statuses.map((s) => (
+              <button
+                type="button"
+                class:list={['pill', s === 'all' && 'pill-active']}
+                role="radio"
+                aria-checked={s === 'all' ? 'true' : 'false'}
+                data-filter={s}
+              >
+                {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <RunsTable runs={runs} formatDuration={formatDuration} timeAgo={timeAgo} />
+
+        <p class="item-count" id="runs-count" aria-live="polite" aria-atomic="true">
+          Showing {runs.length} of {runs.length} runs
+        </p>
+      </div>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .runs-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+
+  .runs-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ms-space-4);
+  }
+
+  .runs-stats {
+    display: flex;
+    gap: var(--ms-space-6);
+    flex-wrap: wrap;
+  }
+
+  .runs-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+    flex-wrap: wrap;
+  }
+
+  .runs-search {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  @media (max-width: 639px) {
+    .runs-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .runs-stats {
+      gap: var(--ms-space-4);
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/runs.js"></script>

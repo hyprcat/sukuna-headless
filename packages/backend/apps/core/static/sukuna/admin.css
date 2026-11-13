@@ -1,0 +1,141 @@
+/* Sukuna admin overrides — adheres to docs/DESIGN.md and
+ * docs/FRONTEND_CODING_STANDARDS.md.
+ *
+ * The admin panel is a first-class operational surface and must read like
+ * the dashboard. Single lime accent, body in Google Sans Flex, code in
+ * JetBrains Mono, marker font scoped to .hl spans. Focus ring is the same
+ * black-inner + lime-halo combo specified for the dashboard.
+ *
+ * Brand fonts are self-hosted. Drop the woff2 binaries into
+ * apps/core/static/sukuna/fonts/ when the frontend lands; until then the
+ * admin gracefully falls back to system fonts via the @font-face stack.
+ */
+
+@font-face {
+  font-family: "Google Sans Flex";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("./fonts/google-sans-flex.woff2") format("woff2-variations"),
+       url("./fonts/google-sans-flex.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fuzzy Bubbles";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/fuzzy-bubbles-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Fuzzy Bubbles";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/fuzzy-bubbles-bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("./fonts/jetbrains-mono.woff2") format("woff2-variations"),
+       url("./fonts/jetbrains-mono.woff2") format("woff2");
+}
+
+:root {
+  --ms-accent-lime: #d7f25c;
+  --ms-canvas: oklch(98% 0 0);
+  --ms-fg-1: oklch(15% 0 0);
+  --ms-fg-2: oklch(28% 0 0);
+  --ms-font-body: "Google Sans Flex", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  --ms-font-marker: "Fuzzy Bubbles", "Comic Sans MS", cursive;
+  --ms-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  font-family: var(--ms-font-body);
+}
+
+code,
+kbd,
+pre,
+samp,
+.font-mono {
+  font-family: var(--ms-font-mono);
+}
+
+/* Marker font is scoped to highlight spans only — used elsewhere it cheapens. */
+.hl,
+.hl-soft {
+  font-family: var(--ms-font-marker);
+  font-weight: 700;
+}
+
+/* Body prose contrast: never lighter than --ms-fg-2 (~8.6:1 on canvas). */
+body,
+p,
+li,
+td,
+.field-text,
+.form-row label,
+.help {
+  color: var(--ms-fg-2);
+}
+
+/*
+ * Focus ring per DESIGN.md: 2px solid black inner outline + 4px lime halo.
+ * Lime alone fails 3:1 on canvas — the black inner carries the contrast.
+ * On dark surfaces the inner flips to white.
+ */
+:where(
+    a,
+    button,
+    [role="button"],
+    input,
+    textarea,
+    select,
+    summary,
+    [tabindex]:not([tabindex="-1"]),
+    .button
+  ):focus-visible {
+  outline: 2px solid #111 !important;
+  outline-offset: 0 !important;
+  box-shadow: 0 0 0 4px var(--ms-accent-lime) !important;
+  border-radius: 4px;
+}
+
+.dark :where(
+    a,
+    button,
+    [role="button"],
+    input,
+    textarea,
+    select,
+    summary,
+    [tabindex]:not([tabindex="-1"]),
+    .button
+  ):focus-visible {
+  outline-color: #fff !important;
+}
+
+/* Strip Unfold's default focus ring so we don't double up. */
+:where(a, button, input, textarea, select, summary):focus {
+  outline: none;
+}
+
+/* Honor prefers-reduced-motion (FRONTEND_CODING_STANDARDS.md). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

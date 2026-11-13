@@ -1,0 +1,171 @@
+---
+import StatusBadge from '../ui/StatusBadge.astro';
+import AgentBadge from '../ui/AgentBadge.astro';
+import { initial } from '../../lib/format';
+
+interface Props {
+  id: string;
+  name: string;
+  description: string;
+  agentName: string;
+  cronExpression: string;
+  executionsCount: number;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  status: string;
+  prompt: string;
+  failureHandling: string;
+  targetEndUserExternalId: string;
+}
+
+const {
+  id,
+  name,
+  description,
+  agentName,
+  cronExpression,
+  executionsCount,
+  lastRunAt,
+  nextRunAt,
+  status,
+  prompt,
+  failureHandling,
+  targetEndUserExternalId,
+} = Astro.props;
+
+function cronToHuman(cron: string): string {
+  const parts = cron.split(/\s+/);
+  if (parts.length < 5) return cron;
+  const [min, hour, dom, , dow] = parts;
+  if (min === '*' && hour === '*') return 'Every minute';
+  if (min === '0' && hour === '*') return 'Every hour';
+  if (dom === '*' && dow === '*' && hour !== '*' && min !== '*') return 'Every day';
+  if (dow !== '*' && dom === '*') {
+    const days: Record<string, string> = {
+      '0': 'Sunday',
+      '1': 'Monday',
+      '2': 'Tuesday',
+      '3': 'Wednesday',
+      '4': 'Thursday',
+      '5': 'Friday',
+      '6': 'Saturday',
+    };
+    return `Every ${days[dow] ?? dow}`;
+  }
+  return cron;
+}
+
+function formatDateTimeShort(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }) +
+    ', ' +
+    d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  );
+}
+
+const normalizedStatus = status.toLowerCase();
+const statusKey =
+  normalizedStatus === 'active'
+    ? 'active'
+    : normalizedStatus === 'paused'
+      ? 'paused'
+      : normalizedStatus === 'disabled'
+        ? 'disabled'
+        : 'inactive';
+---
+
+<tr
+  data-id={id}
+  data-name={name}
+  data-description={description}
+  data-agent={agentName}
+  data-cron={cronExpression}
+  data-prompt={prompt}
+  data-status={normalizedStatus}
+  data-failure-handling={failureHandling}
+  data-end-user={targetEndUserExternalId}
+  data-inactive={normalizedStatus !== 'active' ? 'true' : 'false'}
+>
+  <td data-label="Schedule">
+    <div class="schedule-cell">
+      <span class:list={['schedule-avatar', statusKey === 'active' && 'schedule-avatar-active']}>
+        {initial(name)}
+      </span>
+      <div class="schedule-copy">
+        <div class="name-cell">
+          <span class="font-medium text-fg-1">{name}</span>
+          <AgentBadge name={agentName} />
+        </div>
+        {description && <p class="schedule-desc">{description}</p>}
+      </div>
+    </div>
+  </td>
+  <td data-label="Frequency"
+    ><span class="font-mono text-xs">{cronToHuman(cronExpression)}</span></td
+  >
+  <td data-label="Triggers"><span class="font-mono text-xs">{executionsCount}</span></td>
+  <td data-label="Last run"
+    ><span class="font-mono text-xs">{formatDateTimeShort(lastRunAt)}</span></td
+  >
+  <td data-label="Next run"
+    ><span class="font-mono text-xs">{formatDateTimeShort(nextRunAt)}</span></td
+  >
+  <td data-label="Status"><StatusBadge status={statusKey} /></td>
+</tr>
+
+<style>
+  .schedule-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+    min-width: 0;
+  }
+
+  .schedule-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--ms-r-pill);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    background: var(--ms-bg-sunken);
+    color: var(--ms-fg-3);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .schedule-avatar-active {
+    background: var(--ms-accent);
+    color: var(--ms-accent-ink);
+  }
+
+  .schedule-copy {
+    min-width: 0;
+  }
+
+  .name-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    flex-wrap: wrap;
+  }
+
+  .schedule-desc {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+    margin-top: 2px;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>

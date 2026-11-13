@@ -1,0 +1,48 @@
+---
+interface Props {
+  score: number;
+  max?: number;
+  size?: number;
+  class?: string;
+}
+
+const { score, max = 5, size = 14, class: cls = '', ...attrs } = Astro.props;
+const clamped = Math.max(0, Math.min(score, max));
+const filled = Math.round(clamped);
+const labelScore = Number.isInteger(clamped) ? String(clamped) : clamped.toFixed(1);
+---
+
+<span
+  {...attrs}
+  class:list={['star-rating', cls]}
+  role="img"
+  aria-label={`${labelScore} out of ${max} stars`}
+  data-star-rating
+  data-rating-score={labelScore}
+>
+  {
+    Array.from({ length: max }, (_, i) => (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill={i < filled ? 'var(--star-fill)' : 'none'}
+        stroke={i < filled ? 'var(--star-fill)' : 'var(--star-empty)'}
+        stroke-width="1.2"
+        aria-hidden="true"
+      >
+        <path d="M8 1.3l2 4.1 4.5.6-3.3 3.2.8 4.5L8 11.4l-4 2.3.8-4.5L1.5 6l4.5-.6z" />
+      </svg>
+    ))
+  }
+</span>
+
+<style>
+  .star-rating {
+    --star-fill: var(--ms-accent);
+    --star-empty: var(--ms-border-default);
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+  }
+</style>

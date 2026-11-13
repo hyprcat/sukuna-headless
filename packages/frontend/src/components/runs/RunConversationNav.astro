@@ -1,0 +1,192 @@
+---
+import Icon from '../ui/Icon.astro';
+import { statusIcon, statusTone, circleCheck } from '../../lib/run-status';
+import chevronLeft from 'lucide-static/icons/chevron-left.svg?raw';
+import chevronRight from 'lucide-static/icons/chevron-right.svg?raw';
+
+export interface ConversationRun {
+  runUid: string;
+  status: string;
+  promptPreview: string;
+}
+
+interface Props {
+  title: string;
+  runs: ConversationRun[];
+  currentUid: string;
+}
+
+const { title, runs, currentUid } = Astro.props;
+
+const currentIndex = runs.findIndex((r) => r.runUid === currentUid);
+const previous = currentIndex > 0 ? runs[currentIndex - 1] : null;
+const next = currentIndex >= 0 && currentIndex < runs.length - 1 ? runs[currentIndex + 1] : null;
+---
+
+<section class="conversation-nav" aria-label="Conversation thread">
+  <header class="conversation-header">
+    <span class="conversation-eyebrow">Conversation</span>
+    <h2 class="conversation-title">{title || 'Untitled conversation'}</h2>
+    <span class="conversation-count">
+      {runs.length}
+      {runs.length === 1 ? 'run' : 'runs'}
+    </span>
+  </header>
+
+  <ol class="conversation-trail">
+    {
+      runs.map((run, i) => {
+        const isCurrent = run.runUid === currentUid;
+        return (
+          <li class:list={['trail-item', isCurrent && 'trail-current']}>
+            <a href={`/runs/${run.runUid}`} aria-current={isCurrent ? 'true' : undefined}>
+              <span class="trail-index">{i + 1}</span>
+              <Icon
+                svg={statusIcon[run.status] ?? circleCheck}
+                size={13}
+                class={statusTone[run.status] ?? 'text-fg-2'}
+              />
+              <span class="trail-label">{run.promptPreview || 'Agent run'}</span>
+            </a>
+          </li>
+        );
+      })
+    }
+  </ol>
+
+  {
+    (previous || next) && (
+      <nav class="conversation-steps" aria-label="Previous and next run">
+        {previous ? (
+          <a class="step-link" href={`/runs/${previous.runUid}`}>
+            <Icon svg={chevronLeft} size={14} />
+            <span>Previous run</span>
+          </a>
+        ) : (
+          <span class="step-spacer" />
+        )}
+        {next && (
+          <a class="step-link step-next" href={`/runs/${next.runUid}`}>
+            <span>Next run</span>
+            <Icon svg={chevronRight} size={14} />
+          </a>
+        )}
+      </nav>
+    )
+  }
+</section>
+
+<style>
+  .conversation-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+    padding: var(--ms-space-4);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+  }
+
+  .conversation-header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--ms-space-2);
+  }
+
+  .conversation-eyebrow {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ms-fg-3);
+  }
+
+  .conversation-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .conversation-count {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .conversation-trail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .trail-item a {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    padding: var(--ms-space-2);
+    border-radius: var(--ms-r-sm);
+    text-decoration: none;
+    color: var(--ms-fg-2);
+    font-size: 0.8125rem;
+    transition: background var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .trail-item a:hover {
+    background: var(--ms-bg-sunken);
+  }
+
+  .trail-current a {
+    background: var(--ms-bg-sunken);
+    color: var(--ms-fg-1);
+    font-weight: 500;
+  }
+
+  .trail-index {
+    font-family: var(--ms-font-mono);
+    font-size: 0.6875rem;
+    color: var(--ms-fg-3);
+    width: 1.25em;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .trail-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .conversation-steps {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--ms-space-2);
+    border-top: 1px solid var(--ms-border-subtle);
+    padding-top: var(--ms-space-3);
+  }
+
+  .step-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    text-decoration: none;
+  }
+
+  .step-link:hover {
+    color: var(--ms-fg-1);
+  }
+
+  .step-next {
+    margin-left: auto;
+  }
+
+  .step-spacer {
+    flex: 1;
+  }
+</style>

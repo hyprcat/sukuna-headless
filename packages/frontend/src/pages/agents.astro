@@ -1,0 +1,358 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import Button from '../components/ui/Button.astro';
+import DataTable from '../components/ui/DataTable.astro';
+import StatusBadge from '../components/ui/StatusBadge.astro';
+import BotDoodle from '../components/doodles/BotDoodle.astro';
+import search from 'lucide-static/icons/search.svg?raw';
+import plus from 'lucide-static/icons/plus.svg?raw';
+import wrench from 'lucide-static/icons/wrench.svg?raw';
+import bookOpen from 'lucide-static/icons/book-open.svg?raw';
+import { gql } from '../lib/graphql';
+import { initial, formatDateShort } from '../lib/format';
+import { currentRole, canAction, Action } from '../lib/permissions';
+
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  defaultModelTier: string;
+  isActive: boolean;
+  toolsCount: number;
+  knowledgeCount: number;
+  createdAt: string;
+}
+
+interface AgentsData {
+  agents: { edges: { node: Agent }[] };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+
+const { data, errors } = await gql<AgentsData>(
+  `query AgentsPage {
+    agents(first: 100) {
+      edges { node {
+        id name description defaultModelTier isActive
+        toolsCount knowledgeCount createdAt
+      } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const layout = Astro.locals.layout;
+const agents = data?.agents?.edges?.map((e) => e.node) ?? [];
+const hasError = !!errors;
+const activeCount = agents.filter((a) => a.isActive).length;
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canWrite = canAction(role, Action.AGENTS_WRITE);
+---
+
+<DashboardLayout title="Agents · midsphere" current="overview">
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && agents.length === 0 && (
+      <EmptyState
+        heading="No agents yet"
+        body='Agents <span class="hl">run for end users</span>. Create one, assign tools and knowledge, and put it to work.'
+      >
+        <BotDoodle size={64} slot="doodle" />
+        {canWrite && (
+          <Button variant="accent" href="/agents/new">
+            <Icon svg={plus} size={16} />
+            New agent
+          </Button>
+        )}
+      </EmptyState>
+    )
+  }
+
+  {
+    !hasError && agents.length > 0 && (
+      <div class="agents-layout">
+        <div class="agents-header">
+          <div>
+            <h1
+              class={
+                layout === 'new'
+                  ? 'text-2xl font-semibold leading-tight tracking-tight text-fg-1'
+                  : 'text-xl font-semibold tracking-tight text-fg-1'
+              }
+            >
+              Your <span class="hl">agents</span>
+            </h1>
+          </div>
+        </div>
+
+        <div
+          class={layout === 'new' ? 'agents-stats -mt-2' : 'agents-stats'}
+          aria-label="Agent statistics"
+        >
+          <span class="agents-stat">{activeCount.toLocaleString()} active</span>
+          <span class="agents-stat-dot" aria-hidden="true">
+            &middot;
+          </span>
+          <span class="agents-stat">{agents.length.toLocaleString()} total</span>
+        </div>
+
+        <div class="agents-toolbar">
+          <form role="search" class="agents-search">
+            <Icon svg={search} size={16} class="search-icon" />
+            <input
+              type="search"
+              id="agents-search"
+              aria-label="Search agents"
+              placeholder="Search by name..."
+              class="search-input"
+              autocomplete="off"
+            />
+          </form>
+
+          <div class="agents-filters">
+            <select
+              id="agents-tier-filter"
+              class="toolbar-select"
+              aria-label="Filter by model tier"
+            >
+              <option value="all">Tier: All</option>
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+
+            <div class="filter-pills" role="radiogroup" aria-label="Filter by status">
+              <button
+                type="button"
+                class="pill pill-active"
+                role="radio"
+                aria-checked="true"
+                data-filter="all"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                class="pill"
+                role="radio"
+                aria-checked="false"
+                data-filter="active"
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                class="pill"
+                role="radio"
+                aria-checked="false"
+                data-filter="inactive"
+              >
+                Inactive
+              </button>
+            </div>
+          </div>
+
+          {canWrite && (
+            <Button variant="accent" href="/agents/new">
+              <Icon svg={plus} size={16} />
+              New agent
+            </Button>
+          )}
+        </div>
+
+        <DataTable label="Agents">
+          <tr slot="head">
+            <th>Agent</th>
+            <th>Status</th>
+            <th>Model tier</th>
+            <th>Tools</th>
+            <th>Knowledge</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+          {agents.map((agent) => (
+            <tr
+              class="agents-row"
+              data-name={agent.name.toLowerCase()}
+              data-tier={agent.defaultModelTier.toLowerCase()}
+              data-active={agent.isActive ? 'true' : 'false'}
+              data-inactive={agent.isActive ? 'false' : 'true'}
+            >
+              <td data-label="Agent">
+                <div class="agent-cell">
+                  <span
+                    class:list={['avatar', agent.isActive ? 'avatar-active' : 'avatar-inactive']}
+                  >
+                    {initial(agent.name)}
+                  </span>
+                  <div class="agent-info">
+                    <span class="agent-name">{agent.name}</span>
+                    {agent.description && <span class="agent-desc">{agent.description}</span>}
+                  </div>
+                </div>
+              </td>
+              <td data-label="Status">
+                <StatusBadge status={agent.isActive ? 'active' : 'inactive'} />
+              </td>
+              <td data-label="Model tier">
+                <span
+                  class:list={[
+                    'tier-badge',
+                    agent.defaultModelTier === 'free' ? 'tier-free' : 'tier-paid',
+                  ]}
+                >
+                  {agent.defaultModelTier}
+                </span>
+              </td>
+              <td data-label="Tools">
+                <span class="count-cell" title="Tools assigned">
+                  <Icon svg={wrench} size={12} />
+                  {agent.toolsCount}
+                </span>
+              </td>
+              <td data-label="Knowledge">
+                <span class="count-cell" title="Knowledge sources">
+                  <Icon svg={bookOpen} size={12} />
+                  {agent.knowledgeCount}
+                </span>
+              </td>
+              <td data-label="Created" class="date-cell">
+                {formatDateShort(agent.createdAt)}
+              </td>
+              <td data-label="Actions">
+                <a href={`/agents/${agent.id}`} class="link-subtle">
+                  View
+                </a>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+
+        <p class="item-count" id="agents-count" aria-live="polite" aria-atomic="true">
+          Showing {agents.length} of {agents.length} agents
+        </p>
+      </div>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .agents-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+
+  .agents-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ms-space-4);
+  }
+
+  .agents-stats {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+  }
+
+  .agents-stat-dot {
+    color: var(--ms-fg-3);
+  }
+
+  .agents-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+    flex-wrap: wrap;
+  }
+
+  .agents-search {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .agents-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  /* Agent cell */
+  .agent-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  .agent-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .agent-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .agent-desc {
+    font-size: 0.6875rem;
+    color: var(--ms-fg-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .tier-badge {
+    text-transform: capitalize;
+  }
+
+  /* Count cells */
+  .count-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .date-cell {
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 639px) {
+    .agents-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .agents-filters {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/agents.js"></script>

@@ -1,0 +1,85 @@
+name: SDK (TypeScript)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/sdk-ts.yml"
+      - "packages/sdk-ts/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/sdk-ts.yml"
+      - "packages/sdk-ts/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.18.0"
+          cache: npm
+          cache-dependency-path: packages/sdk-ts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check bundle-size budget
+        run: npm run size
+
+  publish:
+    name: Publish to npm
+    # Only on a published GitHub release (or manual dispatch); never on PRs.
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    needs: quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.18.0"
+          cache: npm
+          cache-dependency-path: packages/sdk-ts/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # prepublishOnly rebuilds; `npm ci` already ran the test/build gates via `needs`.
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

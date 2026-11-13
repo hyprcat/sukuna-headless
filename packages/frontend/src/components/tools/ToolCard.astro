@@ -1,0 +1,151 @@
+---
+import StatusBadge from '../ui/StatusBadge.astro';
+import AgentBadge from '../ui/AgentBadge.astro';
+
+interface Props {
+  id: string;
+  name: string;
+  description: string;
+  isSensitive: boolean;
+  isActive: boolean;
+  parametersSchema: Record<string, unknown> | null;
+  executionEndpoint: string;
+  agents: string[];
+}
+
+const {
+  id,
+  name,
+  description,
+  isSensitive,
+  isActive,
+  parametersSchema,
+  executionEndpoint,
+  agents,
+} = Astro.props;
+
+function paramCount(schema: Record<string, unknown> | null): number {
+  if (!schema) return 0;
+  const props = schema.properties;
+  return props && typeof props === 'object' ? Object.keys(props).length : 0;
+}
+---
+
+<button
+  type="button"
+  class="tool-card"
+  data-tool-id={id}
+  data-tool-name={name}
+  data-tool-description={description}
+  data-tool-endpoint={executionEndpoint}
+  data-tool-sensitive={String(isSensitive)}
+  data-tool-active={String(isActive)}
+  data-tool-schema={JSON.stringify(parametersSchema ?? {})}
+  data-tool-agents={JSON.stringify(agents)}
+  data-inactive={String(!isActive)}
+>
+  <div class="card-inner">
+    <div class="tool-card-header">
+      <p class="tool-name">{name}</p>
+      <StatusBadge status={isActive ? 'active' : 'inactive'} />
+    </div>
+    <p class="tool-desc">{description || 'No description'}</p>
+    {
+      agents.length > 0 && (
+        <div class="tool-agents">
+          {agents.map((a) => (
+            <AgentBadge name={a} />
+          ))}
+        </div>
+      )
+    }
+    <p class="tool-meta">
+      {paramCount(parametersSchema)} params
+      {
+        isSensitive && (
+          <span class="sensitive-dot" title="Sensitive — requires approval">
+            ●
+          </span>
+        )
+      }
+    </p>
+  </div>
+</button>
+
+<style>
+  .tool-card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: var(--ms-space-4);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-canvas);
+    cursor: pointer;
+    transition:
+      border-color var(--ms-t-color) var(--ms-ease-out),
+      box-shadow var(--ms-t-color) var(--ms-ease-out);
+    border-left: 3px solid transparent;
+  }
+
+  .tool-card:hover {
+    border-color: var(--ms-border-default);
+  }
+
+  :global(.tool-card[aria-pressed='true']) {
+    border-left-color: var(--ms-accent);
+    border-color: var(--ms-border-default);
+    box-shadow: var(--ms-shadow-1);
+  }
+
+  .card-inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .tool-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ms-space-2);
+  }
+
+  .tool-name {
+    min-width: 0;
+    font-family: var(--ms-font-mono);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tool-desc {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tool-agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ms-space-1);
+  }
+
+  .tool-meta {
+    font-family: var(--ms-font-mono);
+    font-size: 0.6875rem;
+    color: var(--ms-fg-3);
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+  }
+
+  .sensitive-dot {
+    color: var(--ms-warn);
+  }
+</style>

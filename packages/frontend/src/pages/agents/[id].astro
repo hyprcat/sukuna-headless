@@ -1,0 +1,334 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import StatusBadge from '../../components/ui/StatusBadge.astro';
+import ActivityTable from '../../components/ui/ActivityTable.astro';
+import InsightList from '../../components/ui/InsightList.astro';
+import Icon from '../../components/ui/Icon.astro';
+import ErrorBanner from '../../components/ui/ErrorBanner.astro';
+import arrowUpRight from 'lucide-static/icons/arrow-up-right.svg?raw';
+import wrench from 'lucide-static/icons/wrench.svg?raw';
+import bookOpen from 'lucide-static/icons/book-open.svg?raw';
+import shield from 'lucide-static/icons/shield.svg?raw';
+import calendar from 'lucide-static/icons/calendar.svg?raw';
+import { gql } from '../../lib/graphql';
+import { initial, formatDateShort } from '../../lib/format';
+
+function relayPk(globalId: string): number {
+  try {
+    return parseInt(atob(globalId).split(':')[1], 10);
+  } catch {
+    return parseInt(globalId, 10);
+  }
+}
+
+interface ToolNode {
+  id: string;
+  name: string;
+}
+interface KnowledgeNode {
+  id: string;
+  name: string;
+}
+interface PolicyNode {
+  id: string;
+  name: string;
+}
+interface AgentDetail {
+  id: string;
+  name: string;
+  description: string;
+  defaultModelTier: string;
+  isActive: boolean;
+  toolsCount: number;
+  knowledgeCount: number;
+  tools: ToolNode[];
+  knowledgeBases: KnowledgeNode[];
+  policy: PolicyNode[];
+  createdAt: string;
+}
+interface RunNode {
+  id: string;
+  runUid: string;
+  status: string;
+  promptPreview: string;
+  endUserIdExternal: string;
+  totalCost: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  rating: { score: number } | null;
+}
+interface InsightNode {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+  affectedAgentIds: number[] | null;
+}
+interface ScheduleNode {
+  id: string;
+  name: string;
+  cronExpression: string;
+  nextRunAt: string | null;
+}
+interface AgentOverviewData {
+  agent: AgentDetail | null;
+  runs: { edges: { node: RunNode }[] };
+  insights: { edges: { node: InsightNode }[] };
+  schedules: { edges: { node: ScheduleNode }[] };
+  ratingStats: { average: number | null; totalCount: number };
+}
+
+const layout = Astro.locals.layout;
+const { id } = Astro.params;
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const agentDbId = relayPk(id!);
+
+const { data, errors } = await gql<AgentOverviewData>(
+  `query AgentOverview($id: ID!, $agentDbId: Int) {
+    agent(id: $id) {
+      id name description defaultModelTier
+      isActive toolsCount knowledgeCount createdAt
+      tools { id name }
+      knowledgeBases: knowledge { id name }
+      policy { id name }
+    }
+    runs(agentId: $agentDbId, first: 8) {
+      edges { node {
+        id runUid status promptPreview
+        endUserIdExternal totalCost
+        startedAt finishedAt createdAt
+        rating { score }
+      } }
+    }
+    insights(status: "active", first: 10) {
+      edges { node { id category title body affectedAgentIds } }
+    }
+    schedules(agentId: $agentDbId, status: "active", first: 5) {
+      edges { node { id name cronExpression nextRunAt } }
+    }
+    ratingStats(agentId: $agentDbId) { average totalCount }
+  }`,
+  { id, agentDbId },
+  cookie,
+  wsSlug,
+);
+
+const agent = data?.agent;
+const hasError = !!errors;
+const runs = data?.runs?.edges?.map((e) => e.node) ?? [];
+const activeRuns = runs.filter((r) => r.status === 'running');
+const allInsights = data?.insights?.edges?.map((e) => e.node) ?? [];
+const agentInsights = allInsights.filter(
+  (i) => Array.isArray(i.affectedAgentIds) && i.affectedAgentIds.includes(agentDbId),
+);
+const schedules = data?.schedules?.edges?.map((e) => e.node) ?? [];
+---
+
+<DashboardLayout
+  title={agent ? `${agent.name} · midsphere` : 'Agent · midsphere'}
+  current="overview"
+  agentName={agent?.name}
+>
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !agent && !hasError && (
+      <ErrorBanner message="Agent not found. It may have been removed or you lack permission." />
+    )
+  }
+
+  {
+    agent && (
+      <div
+        class={
+          layout === 'new'
+            ? 'mx-auto flex max-w-6xl flex-col gap-6'
+            : 'mx-auto flex max-w-6xl flex-col gap-8'
+        }
+      >
+        <div>
+          <div class="flex items-center gap-3">
+            <h1
+              class={
+                layout === 'new'
+                  ? 'text-2xl font-semibold leading-tight tracking-tight text-fg-1'
+                  : 'text-2xl font-semibold tracking-tight text-fg-1'
+              }
+            >
+              {agent.name}
+            </h1>
+            <StatusBadge status={agent.isActive ? 'active' : 'inactive'} />
+          </div>
+          {agent.description && <p class="mt-2 text-sm text-fg-2">{agent.description}</p>}
+        </div>
+
+        <div
+          class={
+            layout === 'new'
+              ? 'grid grid-cols-1 gap-6 lg:grid-cols-[7fr_5fr] lg:gap-8'
+              : 'grid grid-cols-1 gap-10 lg:grid-cols-[7fr_5fr] lg:gap-12'
+          }
+        >
+          {/* Left column: activity + config */}
+          <div class="flex flex-col gap-6">
+            <section aria-label="Recent activity">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-base font-medium text-fg-1">Recent activity</h2>
+                <a
+                  href="/runs"
+                  class="inline-flex items-center gap-1 text-xs text-fg-2 transition-colors hover:text-fg-1"
+                >
+                  View all
+                  <Icon svg={arrowUpRight} size={12} />
+                </a>
+              </div>
+
+              <ActivityTable
+                runs={runs}
+                emptyMessage="No runs yet. They'll appear here once this agent starts working."
+              />
+            </section>
+
+            <section aria-label="Configuration">
+              <h2 class="mb-4 text-base font-medium text-fg-1">Configuration</h2>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <a
+                  href="/tools"
+                  class="group rounded-md border border-border-subtle px-4 py-4 transition-colors hover:bg-sunken"
+                >
+                  <div class="flex items-center gap-2">
+                    <Icon svg={wrench} size={14} class="text-fg-3" />
+                    <span class="text-sm font-medium text-fg-1">Tools ({agent.toolsCount})</span>
+                  </div>
+                  {agent.tools.length > 0 ? (
+                    <ul class="mt-3 flex flex-col gap-1">
+                      {agent.tools.map((t) => (
+                        <li class="truncate text-xs text-fg-2">{t.name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p class="mt-3 text-xs text-fg-3">None assigned</p>
+                  )}
+                </a>
+
+                <a
+                  href="/knowledge"
+                  class="group rounded-md border border-border-subtle px-4 py-4 transition-colors hover:bg-sunken"
+                >
+                  <div class="flex items-center gap-2">
+                    <Icon svg={bookOpen} size={14} class="text-fg-3" />
+                    <span class="text-sm font-medium text-fg-1">
+                      Knowledge sources ({agent.knowledgeCount})
+                    </span>
+                  </div>
+                  {agent.knowledgeBases.length > 0 ? (
+                    <ul class="mt-3 flex flex-col gap-1">
+                      {agent.knowledgeBases.map((kb) => (
+                        <li class="truncate text-xs text-fg-2">{kb.name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p class="mt-3 text-xs text-fg-3">None assigned</p>
+                  )}
+                </a>
+
+                <a
+                  href="/policies"
+                  class="group rounded-md border border-border-subtle px-4 py-4 transition-colors hover:bg-sunken"
+                >
+                  <div class="flex items-center gap-2">
+                    <Icon svg={shield} size={14} class="text-fg-3" />
+                    <span class="text-sm font-medium text-fg-1">
+                      Policies ({agent.policy.length})
+                    </span>
+                  </div>
+                  {agent.policy.length > 0 ? (
+                    <ul class="mt-3 flex flex-col gap-1">
+                      {agent.policy.map((policy) => (
+                        <li class="truncate text-xs text-fg-2">{policy.name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p class="mt-3 text-xs text-fg-3">None assigned</p>
+                  )}
+                </a>
+              </div>
+            </section>
+          </div>
+
+          {/* Right column: insights + running + schedules */}
+          <div class="flex flex-col gap-8">
+            {layout !== 'new' && (
+              <section aria-label="Agent insights">
+                <h2 class="mb-4 text-base font-medium text-fg-1">What I noticed in this area</h2>
+                <InsightList
+                  insights={agentInsights}
+                  emptyMessage="No insights for this agent yet. I'll surface patterns once there's enough activity."
+                />
+              </section>
+            )}
+
+            <section aria-label="Currently running">
+              <h2 class="mb-4 text-base font-medium text-fg-1">Currently running</h2>
+              {activeRuns.length > 0 ? (
+                <div class="flex flex-col gap-1">
+                  {activeRuns.map((run) => (
+                    <a
+                      href={`/runs/${run.runUid}`}
+                      class="flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-sunken"
+                    >
+                      <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sunken text-[10px] font-medium text-fg-2">
+                        {initial(run.endUserIdExternal)}
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium text-fg-1">
+                          {run.endUserIdExternal || run.runUid.slice(0, 8)}
+                        </p>
+                        <p class="truncate text-xs text-fg-2">{run.promptPreview}</p>
+                      </div>
+                      <Icon svg={arrowUpRight} size={14} class="shrink-0 text-fg-3" />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p class="text-sm text-fg-2">No runs in progress.</p>
+              )}
+            </section>
+
+            <section aria-label="Schedules">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-base font-medium text-fg-1">Schedules</h2>
+                <a
+                  href="/schedules"
+                  class="inline-flex items-center gap-1 text-xs text-fg-2 transition-colors hover:text-fg-1"
+                >
+                  View all
+                  <Icon svg={arrowUpRight} size={12} />
+                </a>
+              </div>
+              {schedules.length > 0 ? (
+                <div class="flex flex-col gap-1">
+                  {schedules.map((s) => (
+                    <div class="flex items-center justify-between rounded-md px-3 py-2.5">
+                      <div class="flex items-center gap-3">
+                        <Icon svg={calendar} size={14} class="shrink-0 text-fg-3" />
+                        <span class="text-sm font-medium text-fg-1">{s.name}</span>
+                      </div>
+                      <span class="text-xs text-fg-3">
+                        {s.nextRunAt ? formatDateShort(s.nextRunAt) : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p class="text-sm text-fg-2">No active schedules for this agent.</p>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
+    )
+  }
+</DashboardLayout>

@@ -1,0 +1,158 @@
+[project]
+name = "sukuna-backend"
+version = "0.0.0"
+description = "Sukuna headless backend — Django 6 + Strawberry GraphQL."
+requires-python = ">=3.13"
+readme = "README.md"
+dependencies = [
+    "django>=6.0a1",
+    "strawberry-graphql-django>=0.65",
+    "django-unfold>=0.69",
+    "django-simple-history>=3.7",
+    "django-cors-headers>=4.6",
+    "psycopg[binary,pool]>=3.2",
+    "redis>=5.2",
+    "django-redis>=5.4",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "structlog>=24.4",
+    "sentry-sdk[django]>=2.18",
+    "posthog>=3.7",
+    "opentelemetry-api>=1.28",
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-instrumentation-django>=0.49b0",
+    "opentelemetry-instrumentation-psycopg>=0.49b0",
+    "opentelemetry-instrumentation-redis>=0.49b0",
+    "opentelemetry-instrumentation-httpx>=0.49b0",
+    "opentelemetry-exporter-otlp>=1.28",
+    "httpx>=0.27,<1.0",  # respx 0.23 still imports httpcore directly; pin until respx supports httpx 1.x
+    "tenacity>=9.0",
+    "django-storages[s3]>=1.14",
+    "jsonschema>=4.26.0",
+    "celery[redis]>=5.4",
+    "django-tasks-db>=0.12",
+    "croniter>=3.0",
+    "dodopayments[webhooks]>=1.60",
+    "uvicorn[standard]>=0.34",
+    "e2b>=2.1",
+    "cryptography>=44.0",
+    "pyjwt>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "django-stubs[compatible-mypy]>=5.1",
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "pytest-asyncio>=0.24",
+    "factory-boy>=3.3",
+    "freezegun>=1.5",
+    "respx>=0.21",
+    "pip-audit>=2.7",
+    "django-debug-toolbar>=4.4",
+    "types-jsonschema>=4.26.0.20260408",
+]
+
+[tool.uv]
+prerelease = "allow"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["."]
+extend-exclude = ["**/migrations/*", "entrypoint.sh"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                # isort
+    "UP",               # pyupgrade
+    "B",                # bugbear
+    "C4",               # comprehensions
+    "DJ",               # django
+    "PL",               # pylint
+    "RUF",              # ruff-specific
+    "SIM",              # simplify
+    "TCH",              # type-checking blocks
+    "S",                # bandit
+    "ASYNC",            # async hygiene
+    "PT",               # pytest style
+]
+ignore = [
+    "PLR0913",          # too-many-arguments — handled case-by-case
+    "S101",             # assert (allowed in tests)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "PLR2004"]
+"**/test_*.py" = ["S", "PLR2004"]
+"config/settings/*.py" = ["S105", "S106"]   # secrets read from env at runtime
+"**/apps.py" = ["PLC0415"]                  # AppConfig.ready() requires deferred imports
+"apps/core/observability/otel.py" = ["PLC0415"]  # OTel libs deferred — heavy + skipped when no endpoint
+"apps/**/schemas/*.py" = ["TC001", "TC003"]  # Pydantic v2 needs imported types live at runtime to build validators
+"apps/**/api/*.py" = ["TC001", "TC002", "TC003"]  # Strawberry resolves type annotations at runtime to build the GraphQL schema
+"apps/core/errors.py" = ["TC003"]            # StrEnum members exported for runtime use, not just typing
+"apps/**/views/*.py" = ["TC001", "TC002", "TC003"]  # Django views use HttpRequest/JsonResponse at runtime in signatures
+"apps/**/models/validators.py" = ["TC001", "TC002"]  # Validator functions receive model/schema types at runtime
+"apps/core/exceptions.py" = ["TC001"]        # `code: ClassVar[UserError]` must resolve at class-creation time
+
+[tool.ruff.lint.pylint]
+# Hard size cap from BACKEND_CODING_STANDARDS.md §3:
+# functions/methods ≤20 lines.
+max-statements = 20
+max-args = 6
+max-branches = 8
+max-returns = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["mypy_django_plugin.main"]
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+# Strict gate is on models/ and services/ per standards; the rest can soften
+# until type stubs catch up with Django 6.
+module = ["config.*", "*.api.*", "*.tasks.*", "*.admin.*", "*.views.*", "integrations.*"]
+disallow_untyped_defs = false
+disallow_subclassing_any = false
+disable_error_code = ["misc", "untyped-decorator", "type-arg"]
+
+[[tool.mypy.overrides]]
+# Third-party libs without type stubs / py.typed marker. Mypy can't see their
+# internals; subclassing them ("Class cannot subclass X (has type 'Any')") and
+# attribute lookups must be allowed.
+module = ["simple_history.*", "unfold.*", "factory.*", "celery.*", "dodopayments.*", "django_tasks_db.*", "e2b.*", "cryptography.*"]
+ignore_missing_imports = true
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+# Factory definitions and tests rely on factory_boy's runtime descriptors;
+# mypy can't see through SubFactory / lazy_attribute resolution. Strict typing
+# on these files would require silencing five different error codes per line.
+module = ["*.factories", "*.tests.*"]
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.dev"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    # Benign interpreter-shutdown artifact: async tests open ORM connections in
+    # executor threads (asgiref pool, ASGI test client) whose psycopg objects
+    # are GC'd unclosed at exit, and psycopg's destructor logs an unraisable.
+    # Server-side sessions are reaped in conftest; this only silences the
+    # destructor noise. Scoped narrowly so genuine unraisables still error.
+    "ignore:Exception ignored while calling deallocator:pytest.PytestUnraisableExceptionWarning",
+]

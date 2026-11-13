@@ -1,0 +1,158 @@
+---
+interface Props {
+  dailyData: number[];
+  maxCumulative: number;
+  daysInMonth: number;
+  spendDisplay: string;
+  breakdownRows: [string, number][];
+}
+
+const { dailyData, maxCumulative, daysInMonth, spendDisplay, breakdownRows } = Astro.props;
+
+function formatUsd(val: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  }).format(val);
+}
+---
+
+{
+  dailyData.length > 0 && maxCumulative > 0 ? (
+    <div class="chart-area">
+      <svg
+        class="spend-chart"
+        viewBox={`0 0 ${daysInMonth * 16} 120`}
+        preserveAspectRatio="none"
+        aria-label={`Cumulative spend chart for the month: ${spendDisplay} total`}
+        role="img"
+      >
+        <defs>
+          <linearGradient id="spend-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--ms-accent)" stop-opacity="0.2" />
+            <stop offset="100%" stop-color="var(--ms-accent)" stop-opacity="0.02" />
+          </linearGradient>
+        </defs>
+        <polyline
+          fill="url(#spend-fill)"
+          stroke="none"
+          points={`0,120 ${dailyData.map((v, i) => `${i * 16 + 8},${120 - (v / maxCumulative) * 100}`).join(' ')} ${(daysInMonth - 1) * 16 + 8},120`}
+        />
+        <polyline
+          fill="none"
+          stroke="var(--ms-accent)"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          points={dailyData
+            .map((v, i) => `${i * 16 + 8},${120 - (v / maxCumulative) * 100}`)
+            .join(' ')}
+        />
+        {dailyData.map((v, i) => (
+          <circle
+            cx={i * 16 + 8}
+            cy={120 - (v / maxCumulative) * 100}
+            r="2.5"
+            fill="var(--ms-accent)"
+            stroke="var(--ms-bg-canvas)"
+            stroke-width="1.5"
+          />
+        ))}
+      </svg>
+      <div class="chart-x-labels">
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1)
+          .filter((d) => d === 1 || d % 5 === 0 || d === daysInMonth)
+          .map((d) => (
+            <span style={`left: ${((d - 1) / (daysInMonth - 1)) * 100}%`}>{d}</span>
+          ))}
+      </div>
+    </div>
+  ) : (
+    <div class="chart-empty">
+      <p class="text-sm text-fg-2">No spend data this month yet.</p>
+    </div>
+  )
+}
+
+{
+  breakdownRows.length > 0 && (
+    <table class="breakdown-table">
+      <tbody>
+        {breakdownRows.map(([label, amount]) => (
+          <tr>
+            <td class="breakdown-label">{label}</td>
+            <td class="breakdown-amount">{formatUsd(amount)}</td>
+          </tr>
+        ))}
+        <tr class="breakdown-total">
+          <td class="breakdown-label">Total</td>
+          <td class="breakdown-amount">{spendDisplay}</td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
+<style>
+  .chart-area {
+    position: relative;
+    margin-bottom: var(--ms-space-5);
+  }
+
+  .spend-chart {
+    width: 100%;
+    height: 120px;
+  }
+
+  .chart-x-labels {
+    position: relative;
+    height: 1.25rem;
+    margin-top: var(--ms-space-1);
+  }
+
+  .chart-x-labels span {
+    position: absolute;
+    transform: translateX(-50%);
+    font-size: 0.625rem;
+    color: var(--ms-fg-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chart-empty {
+    padding: var(--ms-space-6) 0;
+    text-align: center;
+  }
+
+  .breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+
+  .breakdown-table tr {
+    border-bottom: 1px solid var(--ms-border-subtle);
+  }
+
+  .breakdown-table tr:last-child {
+    border-bottom: none;
+  }
+
+  .breakdown-label {
+    padding: var(--ms-space-2) 0;
+    color: var(--ms-fg-2);
+  }
+
+  .breakdown-amount {
+    padding: var(--ms-space-2) 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--ms-fg-1);
+  }
+
+  .breakdown-total .breakdown-label,
+  .breakdown-total .breakdown-amount {
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+</style>

@@ -1,0 +1,128 @@
+---
+import StatTile from '../ui/StatTile.astro';
+import Icon from '../ui/Icon.astro';
+import calendar from 'lucide-static/icons/calendar.svg?raw';
+import clock from 'lucide-static/icons/clock.svg?raw';
+import checkCircle from 'lucide-static/icons/circle-check.svg?raw';
+
+interface ScheduleNode {
+  name: string;
+  agentName: string;
+  status: string;
+  nextRunAt: string | null;
+  executionsCount: number;
+}
+
+interface Props {
+  schedules: ScheduleNode[];
+}
+
+const { schedules } = Astro.props;
+
+const activeCount = schedules.filter((s) => s.status.toUpperCase() === 'ACTIVE').length;
+const totalExecutions = schedules.reduce((sum, s) => sum + s.executionsCount, 0);
+
+const nextSchedule =
+  schedules
+    .filter((s) => s.nextRunAt && s.status.toUpperCase() === 'ACTIVE')
+    .sort((a, b) => new Date(a.nextRunAt!).getTime() - new Date(b.nextRunAt!).getTime())[0] ?? null;
+
+function formatNextRun(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (isToday) return `Today, ${time}`;
+  if (isTomorrow) return `Tomorrow, ${time}`;
+  return (
+    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+    `, ${time}`
+  );
+}
+---
+
+<aside class="sidebar" aria-label="Schedule health">
+  <h2 class="sidebar-title">Schedule health</h2>
+
+  <div class="stat-row">
+    <StatTile label="active schedules">
+      <Icon svg={calendar} size={18} class="text-fg-3" slot="icon" />
+      {activeCount}
+    </StatTile>
+  </div>
+
+  <div class="stat-row">
+    <StatTile label="total executions">
+      <Icon svg={checkCircle} size={18} class="text-fg-3" slot="icon" />
+      {totalExecutions.toLocaleString()}
+    </StatTile>
+  </div>
+
+  {
+    nextSchedule && (
+      <div class="next-run-card">
+        <h3 class="next-run-heading">Next scheduled run</h3>
+        <p class="next-run-name">{nextSchedule.name}</p>
+        <div class="next-run-time">
+          <Icon svg={clock} size={14} class="text-fg-3" />
+          <span>{formatNextRun(nextSchedule.nextRunAt)}</span>
+        </div>
+      </div>
+    )
+  }
+</aside>
+
+<style>
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-5);
+  }
+
+  .sidebar-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .stat-row {
+    display: flex;
+    gap: var(--ms-space-6);
+  }
+
+  .next-run-card {
+    padding: var(--ms-space-4);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .next-run-heading {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ms-fg-3);
+  }
+
+  .next-run-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+  }
+
+  .next-run-time {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-1);
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+  }
+</style>

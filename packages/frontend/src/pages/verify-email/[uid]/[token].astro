@@ -1,0 +1,78 @@
+---
+import AuthLayout from '../../../layouts/AuthLayout.astro';
+import Button from '../../../components/ui/Button.astro';
+import MailDoodle from '../../../components/doodles/MailDoodle.astro';
+import CheckDoodle from '../../../components/doodles/CheckDoodle.astro';
+import { apiPost } from '../../../lib/api';
+
+const { uid, token } = Astro.params;
+
+const result = await apiPost(
+  '/auth/verify-email/',
+  { uid, token },
+  Astro.request.headers.get('cookie') ?? undefined,
+);
+
+const verified = result.ok;
+const alreadyVerified =
+  result.data &&
+  'already_verified' in result.data &&
+  (result.data as Record<string, unknown>).already_verified;
+const error = !verified ? (result.error ?? 'Invalid or expired verification link.') : '';
+---
+
+<AuthLayout title="Verify email · midsphere" description="Verify your email address">
+  <div class="relative">
+    {
+      verified ? (
+        <CheckDoodle size={56} class="pointer-events-none absolute -right-2 -top-10" />
+      ) : (
+        <MailDoodle
+          size={120}
+          class="doodle-float pointer-events-none absolute -right-4 -top-20 -rotate-6"
+        />
+      )
+    }
+
+    <section
+      class="relative rounded-lg border border-border-subtle bg-canvas p-8 shadow-1"
+      aria-labelledby="verify-heading"
+    >
+      {
+        verified ? (
+          <div>
+            <h1 id="verify-heading" class="text-2xl font-medium tracking-tight">
+              {alreadyVerified ? 'Already verified' : 'Email verified'}
+            </h1>
+            <p class="mt-3 text-sm text-fg-2 leading-relaxed">
+              {alreadyVerified
+                ? 'Your email was already verified. Sign in to open your workspace.'
+                : 'Your email has been verified. Sign in to open your workspace.'}
+            </p>
+            <div class="mt-7">
+              <Button href="/login" variant="primary" full>
+                Sign in
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <h1 id="verify-heading" class="text-2xl font-medium tracking-tight">
+              Verification failed
+            </h1>
+            <p class="mt-3 text-sm text-fg-2 leading-relaxed">{error}</p>
+            <p class="mt-2 text-sm text-fg-2">
+              The link may have expired. Sign in with the same email to send a new verification
+              link.
+            </p>
+            <div class="mt-7 flex flex-col gap-3">
+              <Button href="/login" variant="primary" full>
+                Sign in
+              </Button>
+            </div>
+          </div>
+        )
+      }
+    </section>
+  </div>
+</AuthLayout>

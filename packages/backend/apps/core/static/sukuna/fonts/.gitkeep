@@ -1,0 +1,6 @@
+# Brand fonts (self-hosted .woff2 per DESIGN.md). Drop in:
+#   google-sans-flex.woff2
+#   fuzzy-bubbles-regular.woff2
+#   fuzzy-bubbles-bold.woff2
+#   jetbrains-mono.woff2
+# The admin gracefully falls back to system fonts until these exist.

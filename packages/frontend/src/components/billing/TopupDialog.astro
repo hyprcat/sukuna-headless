@@ -1,0 +1,179 @@
+---
+import Button from '../ui/Button.astro';
+---
+
+<section id="topup-dialog" class="topup-panel" aria-label="Top up credits">
+  <h2 class="topup-modal-title">Top up credits</h2>
+
+  <p class="topup-modal-label">Select an amount</p>
+  <div class="preset-grid">
+    <button type="button" class="modal-preset-btn" data-amount="20"> $20 </button>
+    <button type="button" class="modal-preset-btn" data-amount="50"> $50 </button>
+    <button type="button" class="modal-preset-btn" data-amount="100"> $100 </button>
+    <button type="button" class="modal-preset-btn" data-amount="500"> $500 </button>
+  </div>
+
+  <label class="topup-custom-label" for="modal-custom-amount"> Custom amount </label>
+  <div class="custom-input-wrap">
+    <span class="custom-prefix">$</span>
+    <input
+      type="number"
+      id="modal-custom-amount"
+      min="20"
+      max="500"
+      step="0.01"
+      placeholder="0.00"
+      class="custom-input"
+      aria-describedby="topup-amount-help modal-topup-error"
+      autocomplete="off"
+    />
+  </div>
+  <p class="topup-help" id="topup-amount-help">Choose $20, $50, $100, or $500 to continue.</p>
+
+  <div class="topup-modal-actions">
+    <Button variant="accent" id="modal-topup-submit" full> Continue to payment </Button>
+    <button type="button" class="modal-cancel" id="modal-cancel"> Cancel </button>
+  </div>
+
+  <p class="topup-error" id="modal-topup-error" hidden></p>
+</section>
+
+<style>
+  /* Inline panel (not a modal) — billing already opens inside the settings
+     dialog, so a nested modal would stack a second backdrop. Toggled via
+     `.is-open` rather than [hidden] so the display rule below stays in control. */
+  .topup-panel {
+    display: none;
+    background: var(--ms-bg-canvas);
+    border: 1px solid var(--ms-border-default);
+    border-radius: var(--ms-r-lg);
+    padding: var(--ms-space-6);
+    max-width: 420px;
+    width: 100%;
+    margin-inline: auto;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .topup-panel.is-open {
+    display: flex;
+  }
+
+  .topup-modal-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .topup-modal-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--ms-space-2);
+  }
+
+  .modal-preset-btn {
+    padding: var(--ms-space-2) var(--ms-space-3);
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1px solid var(--ms-border-default);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-canvas);
+    color: var(--ms-fg-1);
+    cursor: pointer;
+    text-align: center;
+    transition:
+      background 150ms,
+      border-color 150ms;
+  }
+
+  .modal-preset-btn:hover {
+    border-color: var(--ms-fg-3);
+  }
+
+  .modal-preset-btn.selected {
+    background: var(--ms-accent);
+    border-color: var(--ms-accent);
+    color: var(--ms-fg-1);
+  }
+
+  .topup-custom-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+  }
+
+  .custom-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .custom-prefix {
+    position: absolute;
+    left: var(--ms-space-3);
+    font-size: 0.875rem;
+    color: var(--ms-fg-3);
+    pointer-events: none;
+  }
+
+  .custom-input {
+    width: 100%;
+    padding: var(--ms-space-2) var(--ms-space-3) var(--ms-space-2) var(--ms-space-6);
+    font-size: 0.875rem;
+    border: 1px solid var(--ms-border-default);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-canvas);
+    color: var(--ms-fg-1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .custom-input:focus {
+    outline: 2px solid var(--ms-fg-1);
+    outline-offset: -2px;
+    box-shadow: 0 0 0 4px var(--ms-accent);
+  }
+
+  .custom-input::placeholder {
+    color: var(--ms-fg-3);
+  }
+
+  .topup-help {
+    font-size: 0.75rem;
+    color: var(--ms-fg-2);
+    margin-top: calc(var(--ms-space-2) * -1);
+  }
+
+  .topup-error {
+    font-size: 0.75rem;
+    color: var(--ms-err);
+    margin-top: var(--ms-space-1);
+  }
+
+  .topup-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+    margin-top: var(--ms-space-1);
+  }
+
+  .modal-cancel {
+    background: none;
+    border: none;
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    cursor: pointer;
+    padding: var(--ms-space-2);
+    text-align: center;
+  }
+
+  .modal-cancel:hover {
+    color: var(--ms-fg-1);
+  }
+</style>

@@ -1,0 +1,107 @@
+---
+import Icon from '../ui/Icon.astro';
+import chevronDown from 'lucide-static/icons/chevron-down.svg?raw';
+
+interface Props {
+  current: string;
+  settingsSub?: string;
+  layout?: 'classic' | 'new';
+}
+
+const { current, settingsSub, layout = 'classic' } = Astro.props;
+
+const MAIN_TABS = [
+  { id: 'overview', label: 'Overview', href: '/dashboard' },
+  { id: 'runs', label: 'Runs', href: '/runs' },
+  { id: 'tools', label: 'Tools', href: '/tools' },
+  { id: 'knowledge', label: 'Knowledge', href: '/knowledge' },
+  { id: 'schedules', label: 'Schedules', href: '/schedules' },
+  { id: 'policies', label: 'Policies', href: '/policies' },
+  { id: 'end-users', label: 'End Users', href: '/end-users' },
+  { id: 'insights', label: 'Insights', href: '/insights' },
+  { id: 'settings', label: 'Settings', href: '/settings' },
+] as const;
+
+const SETTINGS_TABS = [
+  { id: 'workspace', label: 'Workspace', href: '/settings' },
+  { id: 'members', label: 'Members', href: '/workspace/members' },
+  { id: 'billing', label: 'Billing', href: '/billing' },
+  { id: 'keys', label: 'API Keys', href: '/keys' },
+  { id: 'integrations', label: 'Integrations', href: '/settings/integrations' },
+  { id: 'danger', label: 'Danger zone', href: '/settings/danger' },
+] as const;
+
+const isSettingsActive = current === 'settings';
+const activeSettingsSub = settingsSub ?? 'workspace';
+// New layout drops the Insights surface entirely.
+const navTabs = layout === 'new' ? MAIN_TABS.filter((tab) => tab.id !== 'insights') : MAIN_TABS;
+---
+
+<nav id="main-tabs" aria-label="Main navigation" tabindex="-1">
+  <div class="border-b border-border-subtle bg-canvas">
+    <div class="px-5 md:px-6 lg:px-8">
+      <div class="tab-scroll flex overflow-x-auto">
+        {
+          navTabs.map((tab) => {
+            const isActive = tab.id === current;
+            return (
+              <a
+                href={tab.href}
+                aria-current={isActive ? 'page' : undefined}
+                class:list={[
+                  'relative inline-flex items-center gap-1 px-4 py-3 text-sm whitespace-nowrap border-b-2 motion-safe:transition-colors motion-safe:duration-150',
+                  isActive
+                    ? 'font-bold text-fg-1 border-accent'
+                    : 'text-fg-2 border-transparent hover:text-fg-1',
+                ]}
+              >
+                {tab.label}
+                {tab.id === 'settings' && <Icon svg={chevronDown} size={14} class="opacity-60" />}
+              </a>
+            );
+          })
+        }
+      </div>
+    </div>
+  </div>
+</nav>
+
+{
+  isSettingsActive && (
+    <nav aria-label="Settings navigation">
+      <div class="border-b border-border-subtle bg-canvas">
+        <div class="px-5 md:px-6 lg:px-8">
+          <div class="tab-scroll flex gap-6 overflow-x-auto py-2 text-sm">
+            {SETTINGS_TABS.map((sub) => {
+              const isSubActive = sub.id === activeSettingsSub;
+              return (
+                <a
+                  href={sub.href}
+                  aria-current={isSubActive ? 'page' : undefined}
+                  class:list={[
+                    'border-b-2 py-1.5 whitespace-nowrap motion-safe:transition-colors motion-safe:duration-150',
+                    isSubActive
+                      ? 'font-bold text-fg-1 border-accent'
+                      : 'border-transparent text-fg-2 hover:text-fg-1',
+                  ]}
+                >
+                  {sub.label}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
+<style>
+  .tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .tab-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+</style>

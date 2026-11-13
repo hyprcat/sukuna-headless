@@ -1,0 +1,81 @@
+---
+import DataTable from '../ui/DataTable.astro';
+import { formatDateShort, initial } from '../../lib/format';
+
+interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+interface Props {
+  invitations: Invitation[];
+  canManage: boolean;
+}
+
+const { invitations, canManage } = Astro.props;
+
+const roleBg: Record<string, string> = {
+  admin: 'bg-accent/20 text-fg-1',
+  editor: 'bg-sunken text-fg-2',
+  viewer: 'bg-sunken text-fg-2',
+};
+---
+
+<DataTable label="Pending invitations">
+  <tr slot="head">
+    <th>Email</th>
+    <th>Role</th>
+    <th class="hidden sm:table-cell">Invited</th>
+    {canManage && <th>Actions</th>}
+  </tr>
+  {
+    invitations.map((inv) => (
+      <tr>
+        <td data-label="Email">
+          <div class="flex items-center gap-3">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-pill bg-sunken text-xs font-medium text-fg-2">
+              {initial(inv.email)}
+            </span>
+            <span class="text-sm text-fg-2">{inv.email}</span>
+          </div>
+        </td>
+        <td data-label="Role">
+          <span
+            class={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium capitalize ${roleBg[inv.role] ?? 'bg-sunken text-fg-2'}`}
+          >
+            {inv.role}
+          </span>
+        </td>
+        <td data-label="Invited" class="hidden text-xs text-fg-2 sm:table-cell">
+          {formatDateShort(inv.createdAt)}
+        </td>
+        {canManage && (
+          <td data-label="Actions" class="text-right">
+            <div class="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                class="btn-resend text-xs text-fg-2 transition-colors hover:text-fg-1"
+                data-invitation-id={inv.id}
+                aria-label={`Resend invitation to ${inv.email}`}
+              >
+                Resend
+              </button>
+              <button
+                type="button"
+                class="btn-revoke-invite text-xs text-err/70 transition-colors hover:text-err"
+                data-invitation-id={inv.id}
+                data-invitation-email={inv.email}
+                aria-label={`Cancel invitation for ${inv.email}`}
+              >
+                Cancel
+              </button>
+            </div>
+          </td>
+        )}
+      </tr>
+    ))
+  }
+</DataTable>

@@ -1,0 +1,68 @@
+---
+import Button from '../ui/Button.astro';
+import Input from '../ui/Input.astro';
+
+const ALL_SCOPES = [
+  'runs:write',
+  'runs:read',
+  'tools:read',
+  'knowledge:read',
+  'end_users:write',
+  'end_users:read',
+];
+---
+
+<dialog
+  id="dlg-create"
+  aria-labelledby="dlg-create-title"
+  class="m-auto w-full max-w-md rounded-xl bg-canvas p-0 shadow-lg backdrop:bg-black/40"
+>
+  <div class="p-6">
+    <h2 id="dlg-create-title" class="text-lg font-medium tracking-tight text-fg-1">
+      Create API key
+    </h2>
+    <p class="mt-1 text-sm text-fg-2">Give it a name, pick scopes, and optionally set an expiry.</p>
+
+    <form id="form-create" class="mt-6 flex flex-col gap-5" aria-describedby="create-error">
+      <Input
+        id="key-name"
+        name="name"
+        label="Name"
+        placeholder="e.g. Production backend"
+        required
+      />
+
+      <fieldset aria-describedby="scopes-hint">
+        <legend class="text-sm font-medium text-fg-1">Scopes</legend>
+        <p class="mt-1 text-xs text-fg-3" id="scopes-hint">Select at least one scope</p>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          {
+            ALL_SCOPES.map((scope) => (
+              <label class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-2 transition-colors hover:bg-sunken">
+                <input type="checkbox" name="scopes" value={scope} class="accent-lime" />
+                <code class="font-mono text-xs">{scope}</code>
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+
+      <div class="flex flex-col gap-2">
+        <label for="key-expiry" class="text-sm font-medium text-fg-1">Expiry (optional)</label>
+        <input id="key-expiry" name="expiresAt" type="date" class="input" />
+      </div>
+
+      <div
+        id="create-error"
+        class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+        role="alert"
+      >
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <Button variant="ghost" id="btn-cancel-create">Cancel</Button>
+        <Button variant="accent" type="submit" id="btn-submit-create">Create key</Button>
+      </div>
+    </form>
+  </div>
+</dialog>

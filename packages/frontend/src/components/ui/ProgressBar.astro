@@ -1,0 +1,73 @@
+---
+interface Props {
+  value: number;
+  max: number;
+  name?: string;
+  label?: string;
+  class?: string;
+  ariaValueText?: string;
+  [key: string]: unknown;
+}
+
+const { value, max, name = 'Usage', label, class: cls = '', ariaValueText, ...rest } = Astro.props;
+const hasRange = max > 0;
+const current = hasRange ? Math.min(Math.max(value, 0), max) : 0;
+const pct = hasRange ? (current / max) * 100 : 0;
+const valueText = ariaValueText ?? label ?? (hasRange ? `${current} of ${max}` : undefined);
+---
+
+<div
+  {...rest}
+  class:list={['progress-wrap', cls]}
+  data-progress-bar
+  data-progress-value={current}
+  data-progress-max={hasRange ? max : undefined}
+>
+  <div
+    class="progress-track"
+    role="progressbar"
+    aria-label={name}
+    aria-valuemin={hasRange ? 0 : undefined}
+    aria-valuemax={hasRange ? max : undefined}
+    aria-valuenow={hasRange ? current : undefined}
+    aria-valuetext={valueText}
+  >
+    {hasRange && <div class="progress-fill" style={`width:${pct}%`} />}
+  </div>
+  {label && <span class="progress-label">{label}</span>}
+</div>
+
+<style>
+  .progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 3rem;
+  }
+
+  .progress-track {
+    height: 4px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-bg-sunken);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-accent);
+    transition: width 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill {
+      transition: none;
+    }
+  }
+
+  .progress-label {
+    font-size: 0.6875rem;
+    color: var(--ms-fg-2);
+    font-variant-numeric: tabular-nums;
+  }
+</style>

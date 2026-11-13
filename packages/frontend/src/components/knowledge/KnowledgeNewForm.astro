@@ -1,0 +1,117 @@
+---
+import Button from '../ui/Button.astro';
+---
+
+<div class="new-panel" id="kb-new-panel" hidden>
+  <h2 class="new-heading">Add knowledge</h2>
+
+  <form id="kb-new-form" autocomplete="off">
+    <div class="editor-field">
+      <label for="new-name" class="editor-label">Name</label>
+      <input
+        type="text"
+        id="new-name"
+        name="name"
+        class="input"
+        placeholder="Product Documentation"
+      />
+    </div>
+
+    <div class="editor-field">
+      <label for="new-kind" class="editor-label">Kind</label>
+      <select id="new-kind" name="kind" class="input">
+        <option value="connected_source">Connected source</option>
+        <option value="document" disabled>Document upload</option>
+        <option value="dataset" disabled>Dataset upload</option>
+      </select>
+      <p class="field-help">
+        Document and dataset uploads will be available once file storage is set up.
+      </p>
+    </div>
+
+    <div class="editor-field">
+      <label for="new-description" class="editor-label">Description</label>
+      <input
+        type="text"
+        id="new-description"
+        name="description"
+        class="input"
+        placeholder="Official product docs, guides, and how-to articles."
+      />
+    </div>
+
+    <div class="editor-field" id="new-endpoint-field">
+      <label for="new-endpoint" class="editor-label">Source endpoint</label>
+      <input
+        type="url"
+        id="new-endpoint"
+        name="sourceEndpoint"
+        class="input"
+        placeholder="https://api.example.com/v1/source"
+      />
+    </div>
+
+    <div class="editor-actions">
+      <div id="new-feedback" class="editor-feedback" role="status" aria-live="polite" hidden></div>
+      <Button variant="accent" type="submit" id="create-kb-btn">Add knowledge</Button>
+    </div>
+  </form>
+</div>
+
+<style>
+  .new-panel {
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+    background: var(--ms-bg-canvas);
+    padding: var(--ms-space-5);
+  }
+
+  .new-heading {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .editor-field {
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .editor-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    margin-bottom: var(--ms-space-2);
+  }
+
+  .field-help {
+    margin-top: var(--ms-space-1);
+    color: var(--ms-fg-2);
+    font-size: 0.75rem;
+  }
+
+  .editor-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+    padding-top: var(--ms-space-3);
+    border-top: 1px solid var(--ms-border-subtle);
+  }
+
+  .editor-feedback {
+    font-size: 0.8125rem;
+    padding: var(--ms-space-2) var(--ms-space-3);
+    border-radius: var(--ms-r-xs);
+  }
+
+  :global(.editor-feedback.success) {
+    background: color-mix(in oklch, var(--ms-ok) 12%, transparent);
+    color: var(--ms-ok);
+  }
+
+  :global(.editor-feedback.error) {
+    background: color-mix(in oklch, var(--ms-err) 12%, transparent);
+    color: var(--ms-err);
+  }
+</style>

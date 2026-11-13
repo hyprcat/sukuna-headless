@@ -1,0 +1,199 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Button from '../../components/ui/Button.astro';
+import Icon from '../../components/ui/Icon.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import ErrorBanner from '../../components/ui/ErrorBanner.astro';
+import ShieldDoodle from '../../components/doodles/ShieldDoodle.astro';
+import MembersTable from '../../components/members/MembersTable.astro';
+import PendingInvitesTable from '../../components/members/PendingInvitesTable.astro';
+import RemoveMemberDialog from '../../components/members/RemoveMemberDialog.astro';
+import RevokeInviteDialog from '../../components/members/RevokeInviteDialog.astro';
+import { gql } from '../../lib/graphql';
+import { Action, canAction, currentRole } from '../../lib/permissions';
+import { clientApiUrl } from '../../lib/api';
+import userPlus from 'lucide-static/icons/user-plus.svg?raw';
+
+interface MemberNode {
+  id: string;
+  role: string;
+  userEmail: string;
+  userName: string;
+  userId: string;
+  joinedAt: string | null;
+  userLastActiveAt: string | null;
+}
+
+interface InvitationNode {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  expiresAt: string;
+  pending: boolean;
+}
+
+interface MembersData {
+  workspace: { ownerId: string };
+  workspaceMembers: MemberNode[];
+  pendingInvitations?: InvitationNode[];
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const activeRole = currentRole(Astro.locals.workspaces ?? [], wsSlug ?? null);
+const canManage = canAction(activeRole, Action.MEMBERS_INVITE);
+const { data, errors } = await gql<MembersData>(
+  `query Members($includeInvitations: Boolean!) {
+    workspace { ownerId }
+    workspaceMembers { id role userEmail userName userId joinedAt userLastActiveAt }
+    pendingInvitations @include(if: $includeInvitations) {
+      id
+      email
+      role
+      createdAt
+      expiresAt
+      pending
+    }
+  }`,
+  { includeInvitations: canManage },
+  cookie,
+  wsSlug,
+);
+
+const members = data?.workspaceMembers ?? [];
+const invitations = (data?.pendingInvitations ?? []).filter((i) => i.pending);
+const ownerId = data?.workspace?.ownerId ?? '';
+const hasError = !!errors;
+
+const apiUrl = clientApiUrl;
+const layout = Astro.locals.layout;
+---
+
+<DashboardLayout title="Members · midsphere" current="settings" settingsSub="members">
+  <div class="mx-auto flex max-w-4xl flex-col gap-8">
+    <section class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <h1 class="text-[28px] font-medium leading-[1.15] tracking-tight">Members</h1>
+        <p class="mt-2 text-sm text-fg-2">
+          People who can <span class="hl">build and manage</span> agents in this workspace.
+        </p>
+      </div>
+      {
+        canManage && (
+          <Button variant="accent" id="btn-show-invite">
+            <Icon svg={userPlus} size={14} />
+            <span>Invite member</span>
+          </Button>
+        )
+      }
+    </section>
+
+    {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+    {
+      !hasError && canManage && (
+        <section
+          id="invite-section"
+          aria-label="Invite a member"
+          class:list={[
+            layout === 'new' ? 'card' : 'rounded-lg border border-border-subtle bg-canvas p-5',
+          ]}
+        >
+          <h2 class="text-sm font-medium text-fg-1">Invite a new member</h2>
+          <p class="mt-1 text-xs text-fg-2">Send an invitation to join this workspace.</p>
+          <form
+            id="form-invite"
+            class="mt-3 flex flex-wrap items-end gap-3"
+            aria-describedby="invite-error invite-success"
+          >
+            <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+              <label for="invite-email" class="text-xs font-medium text-fg-2">
+                Email address
+              </label>
+              <input
+                id="invite-email"
+                name="email"
+                type="email"
+                required
+                aria-required="true"
+                placeholder="colleague@company.com"
+                class="input"
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label for="invite-role" class="text-xs font-medium text-fg-2">
+                Role
+              </label>
+              <select id="invite-role" name="role" class="input !w-auto">
+                <option value="editor" selected>
+                  Editor
+                </option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+            <Button variant="accent" type="submit" id="btn-invite">
+              <span>Send invite</span>
+            </Button>
+          </form>
+          <div
+            id="invite-error"
+            class="mt-3 hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+            role="alert"
+          />
+          <div
+            id="invite-success"
+            class="mt-3 hidden rounded-md border border-ok/20 bg-ok/5 px-3 py-2 text-sm text-ok"
+            role="status"
+          />
+        </section>
+      )
+    }
+
+    {
+      !hasError && members.length > 0 && (
+        <section class:list={[layout === 'new' && 'card']}>
+          <MembersTable members={members} ownerId={ownerId} canManage={canManage} />
+        </section>
+      )
+    }
+
+    {
+      !hasError && invitations.length > 0 && (
+        <section>
+          <h2 class="mb-3 text-sm font-medium text-fg-2">Pending invitations</h2>
+          <div class:list={[layout === 'new' && 'card']}>
+            <PendingInvitesTable invitations={invitations} canManage={canManage} />
+          </div>
+        </section>
+      )
+    }
+
+    {
+      !hasError && members.length === 0 && (
+        <EmptyState
+          heading="No members yet"
+          body='Invite people to <span class="hl">collaborate</span> on agents in this workspace.'
+        >
+          <ShieldDoodle size={68} class="doodle-float" slot="doodle" />
+          {canManage && (
+            <Button variant="accent" id="btn-show-invite-empty">
+              <Icon svg={userPlus} size={14} />
+              <span>Invite member</span>
+            </Button>
+          )}
+        </EmptyState>
+      )
+    }
+
+    <p class="text-xs text-fg-2">Only workspace admins can manage members and invitations.</p>
+  </div>
+
+  <RemoveMemberDialog />
+  <RevokeInviteDialog />
+
+  <div id="api-config" data-url={apiUrl} data-ws={Astro.locals.workspaceSlug ?? ''} hidden></div>
+</DashboardLayout>
+
+<script is:inline src="/scripts/members.js"></script>

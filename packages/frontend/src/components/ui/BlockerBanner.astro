@@ -1,0 +1,59 @@
+---
+interface Props {
+  reason: string;
+  fixUrl?: string;
+  fixLabel?: string;
+}
+
+const { reason, fixUrl, fixLabel } = Astro.props;
+---
+
+<div role="alert" class="blocker-banner">
+  <span class="blocker-reason">{reason}</span>
+  {
+    fixUrl && fixLabel && (
+      <a href={fixUrl} class="blocker-fix">
+        {fixLabel} &rarr;
+      </a>
+    )
+  }
+</div>
+
+<style>
+  .blocker-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--ms-space-2) var(--ms-space-4);
+    border-radius: var(--ms-r-sm);
+    border: 1px solid color-mix(in oklch, var(--ms-err) 20%, transparent);
+    background: color-mix(in oklch, var(--ms-err) 5%, transparent);
+    padding: var(--ms-space-3) var(--ms-space-4);
+    font-size: 0.875rem;
+    color: var(--ms-err);
+  }
+
+  .blocker-reason {
+    flex: 1 1 auto;
+  }
+
+  .blocker-fix {
+    flex: 0 0 auto;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    text-decoration: none;
+    transition: color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .blocker-fix:hover {
+    color: var(--ms-accent);
+  }
+
+  .blocker-fix:focus-visible {
+    outline: 2px solid black;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--ms-accent);
+    border-radius: 2px;
+  }
+</style>

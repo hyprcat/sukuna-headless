@@ -1,0 +1,278 @@
+---
+import Icon from '../ui/Icon.astro';
+import StarRating from '../ui/StarRating.astro';
+import InsightCard from '../ui/InsightCard.astro';
+import BlockerBanner from '../ui/BlockerBanner.astro';
+import { formatDuration, formatDateFull } from '../../lib/format';
+import { resolveRunError } from '../../lib/blockers';
+import type { BlockerContext } from '../../lib/blockers';
+import lightbulb from 'lucide-static/icons/lightbulb.svg?raw';
+
+interface Props {
+  totalCost: number;
+  totalTokens: number;
+  summary: string;
+  errorMessage: string;
+  isScheduled: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  rating: { score: number; comment: string } | null;
+  agentId?: string;
+  agentName?: string;
+  runUid?: string;
+  eventCount?: number;
+  createdAt?: string | null;
+  layout?: 'classic' | 'new';
+}
+
+const {
+  totalCost,
+  totalTokens,
+  summary,
+  errorMessage,
+  isScheduled,
+  startedAt,
+  finishedAt,
+  rating,
+  agentId,
+  agentName,
+  runUid,
+  eventCount,
+  createdAt,
+  layout = 'classic',
+} = Astro.props;
+
+const blockerCtx: BlockerContext = { agentId: agentId ?? undefined };
+const blocker = resolveRunError(errorMessage, blockerCtx);
+---
+
+<aside class="run-sidebar">
+  {
+    layout === 'new' && (
+      <div class="sidebar-section">
+        <h2 class="sidebar-heading">Details</h2>
+        <table class="cost-table">
+          <tbody>
+            {agentName && (
+              <tr>
+                <td>Agent</td>
+                <td class="cost-value">
+                  {agentId ? (
+                    <a class="meta-link" href={`/agents/${agentId}`}>
+                      {agentName}
+                    </a>
+                  ) : (
+                    agentName
+                  )}
+                </td>
+              </tr>
+            )}
+            <tr>
+              <td>Trigger</td>
+              <td class="cost-value">{isScheduled ? 'Scheduled' : 'Manual'}</td>
+            </tr>
+            {eventCount != null && (
+              <tr>
+                <td>Events</td>
+                <td class="cost-value">{eventCount.toLocaleString()}</td>
+              </tr>
+            )}
+            {createdAt && (
+              <tr>
+                <td>Created</td>
+                <td class="cost-value">{formatDateFull(createdAt)}</td>
+              </tr>
+            )}
+            {runUid && (
+              <tr>
+                <td>Run ID</td>
+                <td class="cost-value run-id">{runUid}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  {
+    layout !== 'new' && (
+      <div class="sidebar-section">
+        <h2 class="sidebar-heading">What I noticed in this run</h2>
+        <InsightCard>
+          <Icon svg={lightbulb} size={18} slot="icon" />
+          {totalCost > 0.5
+            ? `This run cost $${totalCost.toFixed(2)}, which is above average. The agent used ${totalTokens.toLocaleString()} tokens.`
+            : `This run used ${totalTokens.toLocaleString()} tokens and cost $${totalCost.toFixed(2)}.`}
+        </InsightCard>
+      </div>
+    )
+  }
+
+  {
+    summary && (
+      <div class="sidebar-section">
+        <h2 class="sidebar-heading">Final output</h2>
+        <p class="sidebar-text">{summary}</p>
+      </div>
+    )
+  }
+
+  {
+    errorMessage && blocker && (
+      <div class="sidebar-section">
+        <h2 class="sidebar-heading text-err">Error</h2>
+        <BlockerBanner
+          reason={blocker.reason}
+          fixUrl={blocker.fixUrl}
+          fixLabel={blocker.fixLabel}
+        />
+        {blocker.reason !== errorMessage && <pre class="sidebar-error">{errorMessage}</pre>}
+      </div>
+    )
+  }
+
+  {
+    rating && (
+      <div class="sidebar-section">
+        <h2 class="sidebar-heading">User feedback</h2>
+        <div class="feedback-block">
+          <StarRating score={rating.score} size={18} />
+          {rating.comment && <p class="sidebar-text">{rating.comment}</p>}
+        </div>
+      </div>
+    )
+  }
+
+  <div class="sidebar-section">
+    <h2 class="sidebar-heading">Cost breakdown</h2>
+    <table class="cost-table">
+      <tbody>
+        <tr>
+          <td>Tokens</td>
+          <td class="cost-value">{totalTokens.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td>Duration</td>
+          <td class="cost-value">{formatDuration(startedAt, finishedAt)}</td>
+        </tr>
+        {
+          isScheduled && layout !== 'new' && (
+            <tr>
+              <td>Trigger</td>
+              <td class="cost-value">Scheduled</td>
+            </tr>
+          )
+        }
+        <tr>
+          <td>Started</td>
+          <td class="cost-value">{formatDateFull(startedAt)}</td>
+        </tr>
+        {
+          finishedAt && (
+            <tr>
+              <td>Finished</td>
+              <td class="cost-value">{formatDateFull(finishedAt)}</td>
+            </tr>
+          )
+        }
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>Total</td>
+          <td class="cost-value cost-total">${totalCost.toFixed(2)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</aside>
+
+<style>
+  .run-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-6);
+  }
+
+  .sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+  }
+
+  .sidebar-heading {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .sidebar-text {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  .sidebar-error {
+    font-family: var(--ms-font-mono);
+    font-size: 0.75rem;
+    color: var(--ms-err);
+    white-space: pre-wrap;
+    line-height: 1.5;
+    padding: var(--ms-space-3);
+    border-radius: var(--ms-r-sm);
+    background: color-mix(in oklch, var(--ms-err) 8%, transparent);
+  }
+
+  .feedback-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+
+  .cost-table td {
+    padding: var(--ms-space-2) 0;
+    color: var(--ms-fg-2);
+  }
+
+  .cost-value {
+    text-align: right;
+    font-family: var(--ms-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cost-table tfoot td {
+    border-top: 1px solid var(--ms-border-subtle);
+    padding-top: var(--ms-space-3);
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .cost-total {
+    font-size: 1rem;
+  }
+
+  .meta-link {
+    color: var(--ms-fg-1);
+    font-family: var(--ms-font-sans);
+    text-decoration: none;
+    border-bottom: 1px solid var(--ms-border-default);
+    transition: border-color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .meta-link:hover {
+    border-color: var(--ms-fg-1);
+  }
+
+  .run-id {
+    font-size: 0.6875rem;
+    color: var(--ms-fg-3);
+    word-break: break-all;
+  }
+</style>

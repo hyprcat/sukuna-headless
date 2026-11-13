@@ -1,0 +1,135 @@
+---
+import Button from '../ui/Button.astro';
+
+interface Props {
+  canWrite: boolean;
+}
+
+const { canWrite } = Astro.props;
+---
+
+<div id="tab-overview" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-overview">
+  <div class="meta-grid">
+    <div class="meta-item">
+      <p class="meta-label">File</p>
+      <p id="detail-filename" class="meta-value mono"></p>
+    </div>
+    <div class="meta-item">
+      <p class="meta-label">Size</p>
+      <p id="detail-filesize" class="meta-value mono"></p>
+    </div>
+    <div class="meta-item">
+      <p class="meta-label">Content type</p>
+      <p id="detail-contenttype" class="meta-value mono"></p>
+    </div>
+    <div class="meta-item">
+      <p class="meta-label">Last updated</p>
+      <p id="detail-updated" class="meta-value"></p>
+    </div>
+    <div class="meta-item" id="detail-indexed-wrap">
+      <p class="meta-label">Last indexed</p>
+      <p id="detail-indexed" class="meta-value"></p>
+    </div>
+    <div class="meta-item" id="detail-endpoint-wrap" hidden>
+      <p class="meta-label">Source endpoint</p>
+      <p id="detail-endpoint" class="meta-value mono"></p>
+    </div>
+  </div>
+
+  <p id="detail-description" class="detail-description"></p>
+
+  <div class="detail-agents-section">
+    <p class="meta-label">Agents using this knowledge</p>
+    <div id="detail-agents" class="detail-agents"></div>
+  </div>
+
+  {
+    canWrite && (
+      <div class="detail-actions">
+        <Button variant="secondary" id="btn-toggle-active">
+          Deactivate
+        </Button>
+        <Button variant="secondary" id="btn-reindex">
+          Reindex
+        </Button>
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .tab-content {
+    min-height: 120px;
+  }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--ms-space-3);
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .meta-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--ms-fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .meta-value {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-1);
+  }
+
+  .mono {
+    font-family: var(--ms-font-mono);
+  }
+
+  .detail-description {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    margin-bottom: var(--ms-space-4);
+    line-height: 1.5;
+  }
+
+  .detail-agents-section {
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .detail-agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ms-space-2);
+    margin-top: var(--ms-space-2);
+  }
+
+  :global(.detail-agents .agent-pill) {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-bg-sunken);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+  }
+
+  :global(.detail-agents .agent-empty) {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+  }
+
+  .detail-actions {
+    display: flex;
+    gap: var(--ms-space-3);
+    padding-top: var(--ms-space-4);
+    border-top: 1px solid var(--ms-border-subtle);
+  }
+</style>

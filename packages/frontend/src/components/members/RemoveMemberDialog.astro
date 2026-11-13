@@ -1,0 +1,37 @@
+---
+import Button from '../ui/Button.astro';
+---
+
+<dialog
+  id="dlg-remove"
+  aria-labelledby="dlg-remove-title"
+  class="m-auto w-full max-w-sm rounded-xl bg-canvas p-0 shadow-lg backdrop:bg-black/40"
+>
+  <div class="p-6">
+    <h2 id="dlg-remove-title" class="text-lg font-medium tracking-tight text-fg-1">
+      Remove member
+    </h2>
+    <p class="mt-2 text-sm text-fg-2">
+      Remove <strong id="remove-member-name" class="text-fg-1"></strong> from this workspace? They will
+      lose access immediately.
+    </p>
+
+    <form id="form-remove" class="mt-5 flex flex-col gap-4">
+      <input type="hidden" name="memberId" id="remove-member-id" />
+
+      <div
+        id="remove-error"
+        class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+        role="alert"
+      >
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-1">
+        <Button variant="ghost" id="btn-cancel-remove">Cancel</Button>
+        <Button variant="primary" type="submit" class="!bg-err !text-white hover:!bg-err/90">
+          Remove
+        </Button>
+      </div>
+    </form>
+  </div>
+</dialog>

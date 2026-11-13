@@ -1,0 +1,189 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Button from '../components/ui/Button.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import GearDoodle from '../components/doodles/GearDoodle.astro';
+import { gql } from '../lib/graphql';
+import { formatDateShort } from '../lib/format';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+
+interface WorkspaceData {
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    billingEmail: string;
+    ownerEmail: string;
+    memberCount: number;
+    createdAt: string;
+  };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const { data, errors } = await gql<WorkspaceData>(
+  `query WorkspaceSettings {
+    workspace {
+      id name slug billingEmail ownerEmail memberCount createdAt
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const ws = data?.workspace;
+const hasError = !!errors;
+const initials =
+  ws?.name
+    ?.split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() ?? '?';
+
+const apiUrl = clientApiUrl;
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canEdit = canAction(role, Action.WORKSPACE_WRITE);
+const layout = Astro.locals.layout;
+---
+
+<DashboardLayout title="Settings · midsphere" current="settings" settingsSub="workspace">
+  <div class:list={['mx-auto flex max-w-4xl flex-col', layout === 'new' ? 'gap-8' : 'gap-10']}>
+    <section class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <h1 class="text-[28px] font-medium leading-[1.15] tracking-tight">Settings</h1>
+        <p class="mt-2 text-sm text-fg-2">
+          Manage your <span class="hl">workspace</span>, team, and billing.
+        </p>
+      </div>
+      <GearDoodle size={48} class="doodle-float" />
+    </section>
+
+    {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+    {
+      !hasError && ws && (
+        <form
+          id="form-settings"
+          class="flex flex-col gap-10"
+          aria-describedby="settings-error settings-success"
+        >
+          <section
+            class:list={['flex flex-col gap-8 md:flex-row md:gap-12', layout === 'new' && 'card']}
+          >
+            <div class="flex flex-1 flex-col gap-6">
+              <h2 class="text-base font-medium text-fg-1">Workspace details</h2>
+
+              <div class="flex flex-col gap-2">
+                <label for="ws-name" class="text-sm font-medium text-fg-1">
+                  Workspace name
+                </label>
+                <input
+                  id="ws-name"
+                  name="name"
+                  type="text"
+                  value={ws.name}
+                  required
+                  aria-required="true"
+                  disabled={!canEdit}
+                  aria-disabled={!canEdit}
+                  class:list={['input', !canEdit && '!bg-sunken !text-fg-2']}
+                />
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label for="ws-slug" class="text-sm font-medium text-fg-1">
+                  Workspace slug
+                </label>
+                <input
+                  id="ws-slug"
+                  type="text"
+                  value={ws.slug}
+                  disabled
+                  aria-disabled="true"
+                  class="input !bg-sunken !text-fg-2"
+                />
+                <p id="ws-slug-hint" class="text-xs text-fg-3">
+                  Slug is set at creation and cannot be changed.
+                </p>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <span class="text-sm font-medium text-fg-1">Public URL</span>
+                <p class="font-mono text-sm text-fg-2">midsphere.com/{ws.slug}</p>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label for="ws-billing-email" class="text-sm font-medium text-fg-1">
+                  Billing email
+                </label>
+                <input
+                  id="ws-billing-email"
+                  name="billingEmail"
+                  type="email"
+                  value={ws.billingEmail}
+                  placeholder="billing@company.com"
+                  disabled={!canEdit}
+                  aria-disabled={!canEdit}
+                  class:list={['input', !canEdit && '!bg-sunken !text-fg-2']}
+                />
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <span class="text-sm font-medium text-fg-1">Owner</span>
+                <p class="text-sm text-fg-2">{ws.ownerEmail}</p>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <span class="text-sm font-medium text-fg-1">Created</span>
+                <p class="text-sm text-fg-2">{formatDateShort(ws.createdAt)}</p>
+              </div>
+            </div>
+
+            <div class="flex flex-col items-center gap-4 md:pt-10">
+              <div class="grid h-28 w-28 place-items-center rounded-pill bg-sunken text-3xl font-medium text-fg-2">
+                {initials}
+              </div>
+              <p class="text-xs text-fg-3">Workspace avatar</p>
+            </div>
+          </section>
+
+          {layout !== 'new' && <hr class="border-border-subtle" />}
+
+          <div
+            id="settings-error"
+            class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+            role="alert"
+          />
+          <div
+            id="settings-success"
+            class="hidden rounded-md border border-ok/20 bg-ok/5 px-3 py-2 text-sm text-ok"
+            role="status"
+          />
+
+          {!canEdit && (
+            <p class="text-xs text-fg-2">Only workspace admins can edit these settings.</p>
+          )}
+
+          <div class="flex justify-end">
+            <Button
+              variant="accent"
+              type="submit"
+              id="btn-save-settings"
+              disabled={!canEdit}
+              title={!canEdit ? 'Only workspace admins can edit settings' : undefined}
+            >
+              Save changes
+            </Button>
+          </div>
+        </form>
+      )
+    }
+  </div>
+
+  <div id="api-config" data-url={apiUrl} data-ws={Astro.locals.workspaceSlug ?? ''} hidden></div>
+</DashboardLayout>
+
+<script is:inline src="/scripts/settings.js"></script>

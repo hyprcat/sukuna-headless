@@ -1,0 +1,104 @@
+---
+import InsightActions from './InsightActions.astro';
+import { CATEGORY_LABELS } from '../../lib/insight-categories';
+import { formatInsightContext, formatInsightTime } from '../../lib/insight-format';
+
+interface Props {
+  id: string;
+  category: string;
+  status: string;
+  createdAt: string;
+  affectedAgentIds?: number[];
+  affectedRunIds?: string[];
+  affectedEndUserIds?: number[];
+  canDismiss: boolean;
+  canPin: boolean;
+}
+
+const {
+  id,
+  category,
+  status,
+  createdAt,
+  affectedAgentIds = [],
+  affectedRunIds = [],
+  affectedEndUserIds = [],
+  canDismiss,
+  canPin,
+} = Astro.props;
+
+const isPinned = status === 'pinned';
+const relatedContext = formatInsightContext({
+  agentCount: affectedAgentIds.length,
+  runCount: affectedRunIds.length,
+  endUserCount: affectedEndUserIds.length,
+});
+---
+
+<div class="insight-meta">
+  <span class="insight-category-dot" data-cat={category}></span>
+  <span class="insight-category-label">
+    {CATEGORY_LABELS[category] ?? category}
+  </span>
+  <span class="insight-timestamp">{formatInsightTime(createdAt)}</span>
+  <span class="insight-context">{relatedContext}</span>
+  {isPinned && <span class="insight-pinned-badge">Pinned</span>}
+  <InsightActions id={id} status={status} canDismiss={canDismiss} canPin={canPin} />
+</div>
+
+<style>
+  .insight-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--ms-space-2);
+    padding-left: var(--ms-space-5);
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+  }
+
+  .insight-category-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--ms-fg-3);
+  }
+
+  .insight-category-dot[data-cat='capability_gap'] {
+    background: var(--ms-cat-capability-gap);
+  }
+
+  .insight-category-dot[data-cat='tier_optimization'] {
+    background: var(--ms-cat-tier-optimization);
+  }
+
+  .insight-category-dot[data-cat='quality_issue'] {
+    background: var(--ms-cat-quality-issue);
+  }
+
+  .insight-category-dot[data-cat='scheduled_task_health'] {
+    background: var(--ms-cat-scheduled-health);
+  }
+
+  .insight-category-label {
+    font-weight: 500;
+  }
+
+  .insight-timestamp {
+    color: var(--ms-fg-3);
+  }
+
+  .insight-context {
+    color: var(--ms-fg-2);
+  }
+
+  .insight-pinned-badge {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-accent-soft);
+    color: var(--ms-accent-ink);
+  }
+</style>

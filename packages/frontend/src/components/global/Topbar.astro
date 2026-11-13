@@ -1,0 +1,85 @@
+---
+import AgentSelector from './AgentSelector.astro';
+import AccountMenu from './AccountMenu.astro';
+import Icon from '../ui/Icon.astro';
+import type { Workspace } from '../../lib/types';
+import menuIcon from 'lucide-static/icons/menu.svg?raw';
+import settingsIcon from 'lucide-static/icons/settings.svg?raw';
+
+interface Props {
+  agentName?: string;
+  agents?: Array<{ id: string; name: string }>;
+  credits?: string;
+  userCount?: string;
+  userName?: string;
+  workspaces?: Workspace[];
+  currentWorkspaceSlug?: string | null;
+  layout?: 'classic' | 'new';
+}
+
+const {
+  agentName,
+  agents,
+  credits = '$0',
+  userCount = '0',
+  userName,
+  workspaces,
+  currentWorkspaceSlug,
+  layout = 'classic',
+} = Astro.props;
+---
+
+<header class="w-full border-b border-border-subtle bg-canvas" aria-label="Site header">
+  <div class="relative flex h-[72px] items-center px-5 md:px-6 lg:px-8">
+    <a
+      href="#main-tabs"
+      class="grid h-10 w-10 place-items-center rounded-lg text-fg-1 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken lg:hidden"
+      aria-label="Jump to navigation"
+    >
+      <Icon svg={menuIcon} size={28} />
+    </a>
+
+    <a
+      href="/dashboard"
+      class="absolute left-1/2 shrink-0 -translate-x-1/2 text-[26px] font-semibold leading-none tracking-tight text-fg-1 motion-safe:transition-colors motion-safe:duration-150 hover:text-fg-2 lg:static lg:translate-x-0"
+      aria-label="Go to dashboard"
+    >
+      midsphere.
+    </a>
+
+    <div class="ml-10 hidden items-center gap-8 lg:flex">
+      <AgentSelector agentName={agentName} agents={agents} />
+    </div>
+
+    <div class="ml-auto flex items-center gap-4">
+      <div class="hidden items-center gap-4 lg:flex">
+        <span class="text-sm font-medium text-fg-1">{credits} credits</span>
+        <span class="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true"></span>
+        <span class="text-sm font-medium text-fg-1">{userCount} users</span>
+      </div>
+      <a
+        href="/settings"
+        class="hidden h-10 w-10 place-items-center rounded-lg text-fg-1 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken lg:grid"
+        aria-label="Open settings"
+      >
+        <Icon svg={settingsIcon} size={24} />
+      </a>
+      <AccountMenu
+        userName={userName}
+        workspaces={workspaces}
+        currentWorkspaceSlug={currentWorkspaceSlug}
+        layout={layout}
+      />
+    </div>
+  </div>
+
+  <div class="px-5 pb-4 lg:hidden">
+    <AgentSelector agentName={agentName} agents={agents} />
+    <div
+      class="mt-4 inline-flex items-center gap-2 rounded-pill bg-accent-soft px-3 py-2 text-sm font-medium text-fg-1"
+    >
+      <span class="h-2 w-2 rounded-full bg-accent" aria-hidden="true"></span>
+      {credits} credits
+    </div>
+  </div>
+</header>

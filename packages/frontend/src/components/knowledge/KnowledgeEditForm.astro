@@ -1,0 +1,71 @@
+---
+import Button from '../ui/Button.astro';
+---
+
+<div id="tab-edit" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-edit" hidden>
+  <form id="kb-edit-form" autocomplete="off">
+    <input type="hidden" id="edit-kb-id" name="kbId" value="" />
+
+    <div class="editor-field">
+      <label for="edit-name" class="editor-label">Name</label>
+      <input type="text" id="edit-name" name="name" class="input" />
+    </div>
+
+    <div class="editor-field">
+      <label for="edit-description" class="editor-label">Description</label>
+      <input type="text" id="edit-description" name="description" class="input" />
+    </div>
+
+    <div class="editor-field" id="edit-endpoint-field" hidden>
+      <label for="edit-endpoint" class="editor-label">Source endpoint</label>
+      <input type="url" id="edit-endpoint" name="sourceEndpoint" class="input" />
+    </div>
+
+    <div class="editor-actions">
+      <div id="edit-feedback" class="editor-feedback" role="status" aria-live="polite" hidden></div>
+      <Button variant="accent" type="submit" id="save-kb-btn">Save changes</Button>
+    </div>
+  </form>
+</div>
+
+<style>
+  .tab-content {
+    min-height: 120px;
+  }
+
+  .editor-field {
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .editor-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    margin-bottom: var(--ms-space-2);
+  }
+
+  .editor-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+    padding-top: var(--ms-space-3);
+    border-top: 1px solid var(--ms-border-subtle);
+  }
+
+  .editor-feedback {
+    font-size: 0.8125rem;
+    padding: var(--ms-space-2) var(--ms-space-3);
+    border-radius: var(--ms-r-xs);
+  }
+
+  :global(.editor-feedback.success) {
+    background: color-mix(in oklch, var(--ms-ok) 12%, transparent);
+    color: var(--ms-ok);
+  }
+
+  :global(.editor-feedback.error) {
+    background: color-mix(in oklch, var(--ms-err) 12%, transparent);
+    color: var(--ms-err);
+  }
+</style>

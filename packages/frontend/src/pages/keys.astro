@@ -1,0 +1,184 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Button from '../components/ui/Button.astro';
+import Icon from '../components/ui/Icon.astro';
+import DataTable from '../components/ui/DataTable.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import KeyDoodle from '../components/doodles/KeyDoodle.astro';
+import CreateKeyDialog from '../components/keys/CreateKeyDialog.astro';
+import SecretDialog from '../components/keys/SecretDialog.astro';
+import RevokeKeyDialog from '../components/keys/RevokeKeyDialog.astro';
+import { gql } from '../lib/graphql';
+import { formatDateShort, initial, timeAgo } from '../lib/format';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+import plus from 'lucide-static/icons/plus.svg?raw';
+
+interface APIKeyNode {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  maskedValue: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  isActive: boolean;
+  createdByEmail: string;
+}
+
+interface KeysData {
+  apiKeys: { edges: { node: APIKeyNode }[] };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const { data, errors } = await gql<KeysData>(
+  `query APIKeys {
+    apiKeys(showRevoked: true, first: 100) {
+      edges { node {
+        id name keyPrefix maskedValue scopes lastUsedAt
+        revokedAt expiresAt createdAt isActive createdByEmail
+      } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const keys = data?.apiKeys?.edges?.map((e) => e.node) ?? [];
+const hasError = !!errors;
+
+function scopeLabel(scopes: string[]): string {
+  if (scopes.length === 6) return 'Full access';
+  return scopes.map((s) => s.split(':').join(' ')).join(', ');
+}
+
+const apiUrl = clientApiUrl;
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canCreate = canAction(role, Action.API_KEYS_CREATE);
+const canRevoke = canAction(role, Action.API_KEYS_REVOKE);
+const layout = Astro.locals.layout;
+---
+
+<DashboardLayout title="API Keys · midsphere" current="settings" settingsSub="keys">
+  <div class="mx-auto flex max-w-5xl flex-col gap-8">
+    <section class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <h1 class="text-[28px] font-medium leading-[1.15] tracking-tight">API Keys</h1>
+        <p class="mt-2 text-sm text-fg-2">
+          Credentials your backend uses to <span class="hl">talk to us</span>. Secrets are shown
+          once.
+        </p>
+      </div>
+      <Button
+        variant="accent"
+        id="btn-open-create"
+        disabled={!canCreate}
+        title={!canCreate ? 'Only workspace admins can create API keys' : undefined}
+      >
+        <Icon svg={plus} size={14} />
+        <span>Create key</span>
+      </Button>
+    </section>
+
+    {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+    {
+      !hasError && keys.length === 0 && (
+        <EmptyState
+          heading="No API keys yet"
+          body='Create a key so your backend can <span class="hl">authenticate</span> with the platform.'
+        >
+          <KeyDoodle size={68} class="doodle-float" slot="doodle" />
+          <Button
+            variant="accent"
+            id="btn-open-create-empty"
+            disabled={!canCreate}
+            title={!canCreate ? 'Only workspace admins can create API keys' : undefined}
+          >
+            <Icon svg={plus} size={14} />
+            <span>Create your first key</span>
+          </Button>
+        </EmptyState>
+      )
+    }
+
+    {
+      !hasError && keys.length > 0 && (
+        <section aria-label="API key list" class:list={[layout === 'new' && 'card']}>
+          <DataTable label="API keys">
+            <tr slot="head">
+              <th>Key name</th>
+              <th>Key value</th>
+              <th class="hidden md:table-cell">Created</th>
+              <th class="hidden md:table-cell">Last used</th>
+              <th class="hidden lg:table-cell">Permissions</th>
+              <th>Actions</th>
+            </tr>
+            {keys.map((key) => (
+              <tr class:list={[!key.isActive && 'opacity-50']}>
+                <td data-label="Key name">
+                  <div class="flex items-center gap-3">
+                    <span class="grid h-8 w-8 shrink-0 place-items-center rounded-pill bg-sunken text-xs font-medium text-fg-2">
+                      {initial(key.name)}
+                    </span>
+                    <p class="text-sm font-medium text-fg-1">{key.name}</p>
+                  </div>
+                </td>
+                <td data-label="Key value">
+                  <code class="font-mono text-xs text-fg-2">{key.maskedValue}</code>
+                </td>
+                <td data-label="Created" class="hidden text-xs text-fg-3 md:table-cell">
+                  {formatDateShort(key.createdAt)}
+                </td>
+                <td data-label="Last used" class="hidden text-xs text-fg-3 md:table-cell">
+                  {key.lastUsedAt ? timeAgo(key.lastUsedAt) : 'Never'}
+                </td>
+                <td data-label="Permissions" class="hidden text-xs text-fg-3 lg:table-cell">
+                  {scopeLabel(key.scopes)}
+                </td>
+                <td data-label="Actions" class="text-right">
+                  {key.isActive ? (
+                    <button
+                      type="button"
+                      class:list={[
+                        'btn-revoke text-xs transition-colors',
+                        canRevoke ? 'text-err/70 hover:text-err' : 'text-fg-3 cursor-not-allowed',
+                      ]}
+                      data-key-id={key.id}
+                      data-key-name={key.name}
+                      data-key-prefix={key.keyPrefix}
+                      aria-label={`Revoke key ${key.name}`}
+                      disabled={!canRevoke}
+                      title={!canRevoke ? 'Only workspace admins can revoke API keys' : undefined}
+                    >
+                      Revoke
+                    </button>
+                  ) : (
+                    <span class="text-xs text-fg-3">Revoked</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+
+          <p class:list={['text-xs text-fg-3', layout === 'new' ? 'mt-4' : 'mt-6']}>
+            Rotate keys regularly. Revoked keys cannot be restored.
+          </p>
+        </section>
+      )
+    }
+  </div>
+
+  <CreateKeyDialog />
+  <SecretDialog />
+  <RevokeKeyDialog />
+
+  <div id="api-config" data-url={apiUrl} data-ws={Astro.locals.workspaceSlug ?? ''} hidden></div>
+</DashboardLayout>
+
+<script is:inline src="/scripts/keys.js"></script>

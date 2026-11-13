@@ -1,0 +1,71 @@
+---
+interface Props {
+  actionHref?: string;
+  actionLabel?: string;
+  class?: string;
+}
+
+const { actionHref, actionLabel, class: cls = '' } = Astro.props;
+---
+
+<article class={`insight-card ${cls}`}>
+  <span class="insight-icon" aria-hidden="true">
+    <slot name="icon" />
+  </span>
+  <div class="insight-body">
+    <div class="text-sm text-fg-2 leading-relaxed">
+      <slot />
+    </div>
+    {
+      actionHref && actionLabel && (
+        <a href={actionHref} class="insight-action">
+          {actionLabel} &rarr;
+        </a>
+      )
+    }
+  </div>
+</article>
+
+<style>
+  .insight-card {
+    display: flex;
+    gap: var(--ms-space-3);
+    padding: var(--ms-space-4) var(--ms-space-5);
+    border: 1px solid var(--ms-border-default);
+    border-left: 4px solid var(--ms-accent);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-canvas);
+    box-shadow: var(--ms-shadow-1);
+  }
+
+  .insight-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-accent-soft);
+    color: var(--ms-fg-1);
+  }
+
+  .insight-body {
+    min-width: 0;
+    padding-top: 2px;
+  }
+
+  .insight-action {
+    display: inline-flex;
+    align-items: center;
+    margin-top: var(--ms-space-2);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ms-accent-ink);
+    text-decoration: none;
+  }
+
+  .insight-action:hover {
+    text-decoration: underline;
+  }
+</style>

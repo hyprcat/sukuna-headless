@@ -1,0 +1,264 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import Button from '../components/ui/Button.astro';
+import MasterDetail from '../components/ui/MasterDetail.astro';
+import WrenchDoodle from '../components/doodles/WrenchDoodle.astro';
+import ToolCard from '../components/tools/ToolCard.astro';
+import ToolEditor from '../components/tools/ToolEditor.astro';
+import search from 'lucide-static/icons/search.svg?raw';
+import plus from 'lucide-static/icons/plus.svg?raw';
+import { gql } from '../lib/graphql';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+
+interface ToolNode {
+  id: string;
+  name: string;
+  description: string;
+  executionEndpoint: string;
+  isSensitive: boolean;
+  isActive: boolean;
+  parametersSchema: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+interface AgentNode {
+  id: string;
+  name: string;
+  tools: { id: string }[];
+}
+
+interface ToolsPageData {
+  tools: { edges: { node: ToolNode }[] };
+  agents: { edges: { node: AgentNode }[] };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const apiUrl = clientApiUrl;
+
+const { data, errors } = await gql<ToolsPageData>(
+  `query ToolsPage {
+    tools(first: 100) {
+      edges { node {
+        id name description executionEndpoint
+        isSensitive isActive parametersSchema createdAt
+      } }
+    }
+    agents(first: 100) {
+      edges { node { id name tools { id } } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const tools = data?.tools?.edges?.map((e) => e.node) ?? [];
+const agents = data?.agents?.edges?.map((e) => e.node) ?? [];
+
+const toolAgentMap = new Map<string, string[]>();
+for (const agent of agents) {
+  for (const t of agent.tools) {
+    const existing = toolAgentMap.get(t.id) ?? [];
+    existing.push(agent.name);
+    toolAgentMap.set(t.id, existing);
+  }
+}
+
+const hasError = !!errors;
+const allAgentNames = agents.map((a) => ({ id: a.id, name: a.name }));
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canWrite = canAction(role, Action.TOOLS_WRITE);
+const layout = Astro.locals.layout;
+---
+
+<DashboardLayout title="Tools · midsphere" current="tools">
+  <div id="api-config" data-url={apiUrl} data-ws={wsSlug ?? ''} hidden></div>
+
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && (
+      <MasterDetail listWidth="60%" detailLabel="Tool editor">
+        <div class="tools-list-panel" slot="list">
+          {layout === 'new' ? (
+            <div class="flex flex-col gap-1">
+              <h1 class="text-2xl font-semibold leading-tight tracking-tight text-fg-1">
+                Agent <span class="hl">tools</span>
+              </h1>
+              <p class="text-sm text-fg-2">Connect your agents to APIs, databases, and storage.</p>
+            </div>
+          ) : (
+            <h1 class="text-xl font-semibold tracking-tight text-fg-1">
+              Agent <span class="hl">tools</span>
+            </h1>
+          )}
+
+          {tools.length > 0 && (
+            <div class="tools-toolbar">
+              <form role="search" class="tools-search">
+                <Icon svg={search} size={16} class="search-icon" />
+                <input
+                  type="search"
+                  id="tool-search"
+                  aria-label="Search tools"
+                  placeholder="Search tools…"
+                  class="search-input"
+                  autocomplete="off"
+                />
+              </form>
+              {canWrite && (
+                <Button variant="accent" id="new-tool-btn">
+                  <Icon svg={plus} size={16} />
+                  New tool
+                </Button>
+              )}
+            </div>
+          )}
+
+          {tools.length > 0 && (
+            <div class="filter-pills" role="radiogroup" aria-label="Filter tools by status">
+              <button
+                type="button"
+                class="pill pill-active"
+                role="radio"
+                aria-checked="true"
+                data-filter="all"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                class="pill"
+                role="radio"
+                aria-checked="false"
+                data-filter="active"
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                class="pill"
+                role="radio"
+                aria-checked="false"
+                data-filter="inactive"
+              >
+                Inactive
+              </button>
+            </div>
+          )}
+
+          <div class="tool-grid" id="tool-grid">
+            {tools.map((tool) => (
+              <ToolCard
+                id={tool.id}
+                name={tool.name}
+                description={tool.description}
+                isSensitive={tool.isSensitive}
+                isActive={tool.isActive}
+                parametersSchema={tool.parametersSchema}
+                executionEndpoint={tool.executionEndpoint}
+                agents={toolAgentMap.get(tool.id) ?? []}
+              />
+            ))}
+          </div>
+
+          {tools.length === 0 ? (
+            <EmptyState
+              heading="No tools yet"
+              body='Tools let your agents <span class="hl">reach outside</span> — APIs, databases, file storage, and more.'
+            >
+              <WrenchDoodle size={64} slot="doodle" />
+              {canWrite && (
+                <Button variant="accent" id="new-tool-empty">
+                  <Icon svg={plus} size={16} />
+                  New tool
+                </Button>
+              )}
+            </EmptyState>
+          ) : (
+            <p class="item-count" id="tool-count" aria-live="polite" aria-atomic="true">
+              Showing {tools.length} of {tools.length} tools
+            </p>
+          )}
+        </div>
+
+        <Fragment slot="detail">
+          <div id="editor-panel" data-can-write={canWrite ? 'true' : 'false'} hidden>
+            <ToolEditor agents={allAgentNames} canWrite={canWrite} />
+          </div>
+
+          <div
+            class:list={[
+              layout === 'new'
+                ? 'hidden flex-col items-center justify-center py-12 text-center lg:flex'
+                : 'tools-editor-placeholder',
+            ]}
+            id="editor-placeholder"
+          >
+            <WrenchDoodle size={48} class="doodle-float" />
+            <p class="mt-3 text-sm text-fg-2">
+              {canWrite ? 'Pick a tool to edit its details.' : 'Pick a tool to see how it works.'}
+            </p>
+          </div>
+        </Fragment>
+      </MasterDetail>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .tools-list-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+  }
+
+  .tools-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  .tools-search {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .tool-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ms-space-3);
+  }
+
+  @media (min-width: 640px) {
+    .tool-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .tools-editor-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--ms-space-9) var(--ms-space-5);
+    border: 1px dashed var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+    text-align: center;
+  }
+
+  @media (max-width: 1023px) {
+    .tools-editor-placeholder {
+      display: none;
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/tools.js"></script>

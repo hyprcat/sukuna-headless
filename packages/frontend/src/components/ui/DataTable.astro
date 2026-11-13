@@ -1,0 +1,151 @@
+---
+interface Props {
+  class?: string;
+  label?: string;
+}
+
+const { class: cls = '', label } = Astro.props;
+const tableAttrs = label ? { 'aria-label': label } : {};
+---
+
+<div class={`table-wrap ${cls}`} data-table>
+  <table {...tableAttrs}>
+    <thead>
+      <slot name="head" />
+    </thead>
+    <tbody>
+      <slot />
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 var(--ms-space-1);
+    font-size: 0.875rem;
+  }
+
+  thead :global(th) {
+    padding: var(--ms-space-3) var(--ms-space-4);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ms-fg-3);
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--ms-border-subtle);
+  }
+
+  tbody :global(tr) {
+    transition: background-color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  tbody :global(tr:hover) {
+    background: var(--ms-bg-sunken);
+  }
+
+  tbody :global(tr:hover td) {
+    background: var(--ms-bg-sunken);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    tbody :global(tr) {
+      transition: none;
+    }
+  }
+
+  tbody :global(td) {
+    padding: var(--ms-space-3) var(--ms-space-4);
+    color: var(--ms-fg-2);
+    vertical-align: middle;
+  }
+
+  tbody :global(td:first-child) {
+    color: var(--ms-fg-1);
+    font-weight: 500;
+    border-top-left-radius: var(--ms-r-md);
+    border-bottom-left-radius: var(--ms-r-md);
+  }
+
+  tbody :global(td:last-child) {
+    border-top-right-radius: var(--ms-r-md);
+    border-bottom-right-radius: var(--ms-r-md);
+  }
+
+  @media (max-width: 767px) {
+    .table-wrap {
+      overflow-x: visible;
+    }
+
+    table,
+    tbody,
+    tbody :global(tr),
+    tbody :global(td) {
+      display: block;
+      width: 100%;
+    }
+
+    thead {
+      display: none;
+    }
+
+    tbody {
+      display: grid;
+      gap: var(--ms-space-3);
+    }
+
+    tbody :global(tr) {
+      border: 1px solid var(--ms-border-subtle);
+      border-radius: var(--ms-r-md);
+      background: var(--ms-bg-canvas);
+      padding: var(--ms-space-3);
+    }
+
+    tbody :global(td:not(.hidden)) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--ms-space-3);
+      padding: var(--ms-space-2) 0;
+      text-align: right;
+    }
+
+    tbody :global(td.hidden) {
+      display: none;
+    }
+
+    tbody :global(td:first-child) {
+      display: block;
+      padding-top: 0;
+      text-align: left;
+    }
+
+    tbody :global(td:last-child) {
+      padding-bottom: 0;
+    }
+
+    tbody :global(td[data-label]::before) {
+      content: attr(data-label);
+      flex: 0 0 auto;
+      font-family: var(--ms-font-mono);
+      font-size: 0.6875rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ms-fg-3);
+    }
+
+    tbody :global(td:first-child::before) {
+      display: none;
+    }
+  }
+</style>

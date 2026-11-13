@@ -1,0 +1,64 @@
+# midsphere sandbox reverse proxy
+#
+# Bridges the stable client-facing sandbox URL to the ephemeral E2B host.
+#
+#   client sees:   https://{sandbox_id}.{$SANDBOX_DOMAIN}      (e.g. run.midsphere.com)
+#   real upstream: https://8000-{sandbox_id}.e2b.app
+#
+# The backend never exposes the e2b.app host. It hands the SDK and dashboard the
+# *.{$SANDBOX_DOMAIN} URL (see apps/runs/api/types.py:
+#   f"https://{run.sandbox_id}.{runtime.sandbox_domain}")
+# and the agent_server inside the sandbox listens on port 8000. Caddy captures the
+# sandbox id from the subdomain and rewrites the request to the E2B edge.
+#
+# This needs a custom Caddy build with the Cloudflare DNS plugin — see Dockerfile
+# and README.md. Required environment:
+#   CLOUDFLARE_API_TOKEN   token with Zone:DNS:Edit on the {$SANDBOX_DOMAIN} zone
+#   SANDBOX_DOMAIN         apex of the wildcard (default run.midsphere.com)
+#   ACME_EMAIL            contact for Let's Encrypt expiry notices
+{
+	email {$ACME_EMAIL}
+}
+
+*.{$SANDBOX_DOMAIN:run.midsphere.com} {
+	# Wildcard certs can only be issued via DNS-01 — HTTP-01 cannot prove a wildcard.
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+
+	# The site block already scopes to a single subdomain label of the wildcard
+	# (Caddy's `*` matches exactly one label), so capturing the leftmost label is
+	# enough to recover the sandbox id. E2B ids are lowercase alphanumeric.
+	@sandbox header_regexp sandbox Host ^([a-z0-9]+)\.
+
+	handle @sandbox {
+		# No scheme on the upstream: Caddy forbids placeholders in a scheme-bearing
+		# address, so TLS + the :443 port move into the transport below.
+		reverse_proxy 8000-{re.sandbox.1}.e2b.app:443 {
+			# E2B's edge routes by Host/SNI — both must name the real upstream.
+			# (X-Forwarded-Host is set automatically.)
+			header_up Host 8000-{re.sandbox.1}.e2b.app
+
+			transport http {
+				# Upstream is genuine TLS on the *.e2b.app certificate. The dial host
+				# is a placeholder, so set the SNI explicitly rather than relying on
+				# auto-derivation.
+				tls
+				tls_server_name 8000-{re.sandbox.1}.e2b.app
+			}
+
+			# Don't buffer responses — SSE streams and chunked callbacks must flush
+			# to the client immediately. WebSocket upgrades are detected and streamed
+			# automatically; Caddy also strips hop-by-hop headers per the HTTP spec,
+			# so we don't strip Connection/Upgrade by hand (that would break upgrades).
+			flush_interval -1
+		}
+	}
+
+	# Hosts on the wildcard that aren't a valid sandbox subdomain get a clean 404
+	# instead of a confusing upstream connection error.
+	handle {
+		respond "Not a sandbox host" 404
+	}
+}

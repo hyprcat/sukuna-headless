@@ -1,0 +1,201 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
+import Icon from '../../components/ui/Icon.astro';
+import ErrorBanner from '../../components/ui/ErrorBanner.astro';
+import BlockerBanner from '../../components/ui/BlockerBanner.astro';
+import BotDoodle from '../../components/doodles/BotDoodle.astro';
+import arrowLeft from 'lucide-static/icons/arrow-left.svg?raw';
+import { gql } from '../../lib/graphql';
+import { resolveBlocker } from '../../lib/blockers';
+import { currentRole, canAction, Action } from '../../lib/permissions';
+
+const layout = Astro.locals.layout;
+let formError = '';
+let formErrorCode = '';
+let prev: Record<string, string> = {};
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canWrite = canAction(role, Action.AGENTS_WRITE);
+const permissionMessage = 'You can view agents, but only admins and editors can create them.';
+
+if (Astro.request.method === 'POST' && !canWrite) {
+  formError = permissionMessage;
+} else if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const name = fd.get('name')?.toString() ?? '';
+  const description = fd.get('description')?.toString() ?? '';
+  const systemPrompt = fd.get('system_prompt')?.toString() ?? '';
+  const tier = fd.get('tier')?.toString() ?? 'free';
+  const webhookUrl = fd.get('webhook_url')?.toString() ?? '';
+  prev = { name, description, system_prompt: systemPrompt, tier, webhook_url: webhookUrl };
+
+  const cookie = Astro.request.headers.get('cookie') ?? '';
+  const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+
+  const { data, errors } = await gql<{
+    createAgent: {
+      success: boolean;
+      errors: { code: string; field: string | null; message: string }[];
+      agent: { id: string } | null;
+    };
+  }>(
+    `mutation CreateAgent($input: CreateAgentInput!) {
+      createAgent(input: $input) {
+        success
+        errors { code field message }
+        agent { id }
+      }
+    }`,
+    {
+      input: {
+        name,
+        description,
+        systemPrompt,
+        defaultModelTier: tier,
+        ...(webhookUrl ? { webhookUrl } : {}),
+      },
+    },
+    cookie,
+    wsSlug,
+  );
+
+  if (errors) {
+    formError = errors[0]?.message ?? 'Request failed.';
+  } else if (data?.createAgent?.success && data.createAgent.agent) {
+    return Astro.redirect(`/agents/${data.createAgent.agent.id}`);
+  } else if (data?.createAgent?.errors?.length) {
+    const e = data.createAgent.errors[0]!;
+    formErrorCode = e.code;
+    const blocker = resolveBlocker(e.code);
+    formError = blocker.reason;
+  }
+}
+---
+
+<DashboardLayout title="New Agent · midsphere" current="overview">
+  <div class="mx-auto flex max-w-2xl flex-col gap-8">
+    <div class="flex items-center gap-3">
+      <a
+        href="/agents"
+        class="grid h-9 w-9 place-items-center rounded-pill text-fg-2 transition-colors duration-150 hover:bg-sunken hover:text-fg-1"
+        aria-label="Back to agents"
+      >
+        <Icon svg={arrowLeft} size={18} />
+      </a>
+      <p class="text-sm text-fg-2">Agents</p>
+    </div>
+
+    <section class="flex items-start justify-between gap-4">
+      <div>
+        <h1
+          class={layout === 'new'
+            ? 'text-[2rem] font-semibold leading-tight tracking-tight text-fg-1'
+            : 'text-2xl font-medium tracking-tight text-fg-1'}
+        >
+          Create a new <span class="hl">agent</span>
+        </h1>
+        <p class="mt-2 text-sm text-fg-2">
+          Give it a name, a system prompt, and a model tier. You can assign tools and knowledge
+          after creation.
+        </p>
+      </div>
+      <BotDoodle size={56} class="doodle-float" />
+    </section>
+
+    {
+      formError && formErrorCode && (
+        <BlockerBanner
+          reason={formError}
+          fixUrl={resolveBlocker(formErrorCode).fixUrl}
+          fixLabel={resolveBlocker(formErrorCode).fixLabel}
+        />
+      )
+    }
+    {formError && !formErrorCode && <ErrorBanner message={formError} />}
+    {!formError && !canWrite && <ErrorBanner message={permissionMessage} />}
+
+    {
+      canWrite ? (
+        <form method="POST" class="flex flex-col gap-6">
+          <Card surface="sunken" class="!p-6">
+            <div class="flex flex-col gap-5">
+              <Input
+                id="name"
+                name="name"
+                label="Agent name"
+                placeholder="e.g. support-triage"
+                required
+                hint="Unique within this workspace."
+                value={prev.name}
+              />
+              <Input
+                id="description"
+                name="description"
+                label="Description"
+                placeholder="What does this agent do?"
+                value={prev.description}
+              />
+              <div class="flex flex-col gap-2">
+                <label for="system_prompt" class="text-sm font-medium text-fg-1">
+                  System prompt
+                </label>
+                <textarea
+                  id="system_prompt"
+                  name="system_prompt"
+                  rows="5"
+                  placeholder="Tell the agent how to behave and what to focus on."
+                  class="input resize-y"
+                >
+                  {prev.system_prompt}
+                </textarea>
+                <p class="text-xs text-fg-3">Sets the tone and focus for every run. Optional.</p>
+              </div>
+              <div class="flex flex-col gap-2">
+                <label for="tier" class="text-sm font-medium text-fg-1">
+                  Default model tier
+                </label>
+                <select id="tier" name="tier" class="input">
+                  <option value="free" selected={prev.tier === 'free' || !prev.tier}>
+                    Free
+                  </option>
+                  <option value="pro" selected={prev.tier === 'pro'}>
+                    Pro
+                  </option>
+                  <option value="enterprise" selected={prev.tier === 'enterprise'}>
+                    Enterprise
+                  </option>
+                </select>
+              </div>
+              <Input
+                id="webhook_url"
+                name="webhook_url"
+                label="Webhook URL"
+                type="url"
+                placeholder="https://example.com/webhook"
+                hint="Get notified when a run finishes. Optional."
+                value={prev.webhook_url}
+              />
+            </div>
+          </Card>
+
+          <div class="flex justify-end gap-3">
+            <Button variant="secondary" href="/agents">
+              Cancel
+            </Button>
+            <Button variant="accent" type="submit">
+              Create agent
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div class="flex justify-start">
+          <Button variant="secondary" href="/agents">
+            Back to agents
+          </Button>
+        </div>
+      )
+    }
+  </div>
+</DashboardLayout>

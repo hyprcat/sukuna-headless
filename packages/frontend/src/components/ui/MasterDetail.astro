@@ -1,0 +1,68 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'section'> {
+  listWidth?: string;
+  maxWidth?: string;
+  detailLabel?: string;
+  class?: string;
+}
+
+const {
+  listWidth = '55%',
+  maxWidth = '1200px',
+  detailLabel = 'Details',
+  class: cls = '',
+  ...rest
+} = Astro.props;
+
+const className = ['master-detail', cls].filter(Boolean).join(' ');
+const style = [`--master-w: ${listWidth}`, `--master-max-w: ${maxWidth}`].join('; ');
+---
+
+<section class={className} style={style} data-master-detail {...rest}>
+  <div class="master-detail-list" data-master-detail-list>
+    <slot name="list" />
+  </div>
+  <aside class="master-detail-panel" aria-label={detailLabel} data-master-detail-panel>
+    <slot name="detail" />
+  </aside>
+</section>
+
+<style>
+  .master-detail {
+    display: grid;
+    grid-template-columns: minmax(0, var(--master-w)) minmax(0, 1fr);
+    gap: var(--ms-space-6);
+    width: min(100%, var(--master-max-w));
+    margin-inline: auto;
+    align-items: start;
+  }
+
+  .master-detail-list {
+    min-width: 0;
+  }
+
+  .master-detail-panel {
+    min-width: 0;
+    position: sticky;
+    top: var(--ms-space-5);
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    padding: var(--ms-space-5);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+    background: var(--ms-bg-canvas);
+  }
+
+  @media (max-width: 1023px) {
+    .master-detail {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .master-detail-panel {
+      position: static;
+      max-height: none;
+    }
+  }
+</style>

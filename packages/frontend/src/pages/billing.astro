@@ -1,0 +1,421 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Button from '../components/ui/Button.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import Icon from '../components/ui/Icon.astro';
+import CoinDoodle from '../components/doodles/CoinDoodle.astro';
+import TopupDialog from '../components/billing/TopupDialog.astro';
+import SpendChart from '../components/billing/SpendChart.astro';
+import { gql } from '../lib/graphql';
+import { formatDateShort } from '../lib/format';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+import plus from 'lucide-static/icons/plus.svg?raw';
+
+interface LedgerNode {
+  id: string;
+  deltaUsd: string;
+  currency: string;
+  kind: string;
+  reference: string;
+  note: string;
+  createdAt: string;
+}
+
+interface TopupNode {
+  id: string;
+  amountUsd: string;
+  status: string;
+  dodoPaymentId: string;
+  createdAt: string;
+}
+
+interface BillingData {
+  wallet: {
+    balanceUsd: string;
+    available: string;
+    lastTopupAt: string | null;
+    entries: { edges: { node: LedgerNode }[] };
+  } | null;
+  topups: { edges: { node: TopupNode }[] };
+  ledgerEntries: { edges: { node: LedgerNode }[] };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const apiUrl = clientApiUrl;
+
+const { data, errors } = await gql<BillingData>(
+  `query BillingPage {
+    wallet {
+      balanceUsd available lastTopupAt
+      entries(first: 50) {
+        edges { node {
+          id deltaUsd currency kind reference note createdAt
+        } }
+      }
+    }
+    topups(first: 20) {
+      edges { node { id amountUsd status createdAt } }
+    }
+    ledgerEntries(first: 100) {
+      edges { node {
+        id deltaUsd currency kind reference note createdAt
+      } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const wallet = data?.wallet;
+const balance = wallet ? parseFloat(wallet.available) : 0;
+const balanceDisplay = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+}).format(balance);
+
+const entries = wallet?.entries?.edges?.map((e) => e.node) ?? [];
+const allLedger = data?.ledgerEntries?.edges?.map((e) => e.node) ?? [];
+
+const now = new Date();
+const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+const thisMonthEntries = allLedger.filter(
+  (e) => new Date(e.createdAt) >= monthStart && parseFloat(e.deltaUsd) < 0,
+);
+const spendThisMonth = thisMonthEntries.reduce(
+  (sum, e) => sum + Math.abs(parseFloat(e.deltaUsd)),
+  0,
+);
+const spendDisplay = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+}).format(spendThisMonth);
+
+const recentTransactions = entries.slice(0, 8);
+
+const spendByKind = new Map<string, number>();
+for (const e of thisMonthEntries) {
+  const key = kindLabel(e.kind);
+  spendByKind.set(key, (spendByKind.get(key) ?? 0) + Math.abs(parseFloat(e.deltaUsd)));
+}
+const breakdownRows: [string, number][] = [...spendByKind.entries()].sort((a, b) => b[1] - a[1]);
+
+const dailySpend = new Map<number, number>();
+for (const e of thisMonthEntries) {
+  const day = new Date(e.createdAt).getDate();
+  dailySpend.set(day, (dailySpend.get(day) ?? 0) + Math.abs(parseFloat(e.deltaUsd)));
+}
+const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+const dailyData: number[] = [];
+let cumulative = 0;
+for (let d = 1; d <= daysInMonth; d++) {
+  cumulative += dailySpend.get(d) ?? 0;
+  dailyData.push(cumulative);
+}
+const maxCumulative = Math.max(...dailyData, 1);
+
+const hasError = !!errors;
+const hasWallet = !!wallet;
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canTopup = canAction(role, Action.BILLING_TOPUP);
+const layout = Astro.locals.layout;
+
+function kindLabel(kind: string): string {
+  switch (kind) {
+    case 'RUN_DEBIT':
+      return 'Agent runs';
+    case 'TOPUP':
+      return 'Top-ups';
+    case 'REFUND':
+      return 'Refunds';
+    case 'ADJUSTMENT':
+      return 'Adjustments';
+    default:
+      return kind;
+  }
+}
+
+function txLabel(kind: string): string {
+  switch (kind) {
+    case 'TOPUP':
+      return 'Credit top-up';
+    case 'RUN_DEBIT':
+      return 'Agent run';
+    case 'REFUND':
+      return 'Refund';
+    case 'ADJUSTMENT':
+      return 'Adjustment';
+    default:
+      return kind;
+  }
+}
+
+function formatUsd(val: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  }).format(val);
+}
+---
+
+<DashboardLayout title="Billing · midsphere" current="settings" settingsSub="billing">
+  <div id="api-config" data-url={apiUrl} data-ws={wsSlug ?? ''} hidden></div>
+
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && !hasWallet && (
+      <EmptyState
+        heading="No billing set up"
+        body='Top up credits so your agents can run. <span class="hl">Credits never expire.</span>'
+      >
+        <CoinDoodle size={64} slot="doodle" />
+        {canTopup && (
+          <Button variant="accent" id="topup-empty-cta">
+            <Icon svg={plus} size={16} />
+            Top up credits
+          </Button>
+        )}
+      </EmptyState>
+    )
+  }
+
+  {
+    !hasError && hasWallet && (
+      <div class="billing-page">
+        <div class="billing-hero">
+          <h1 class="text-xl font-semibold tracking-tight text-fg-1">
+            <span class="hl">Billing</span>
+          </h1>
+
+          <div class="hero-balance">
+            <p class="hero-sublabel">Current credit balance</p>
+            <p class="hero-amount">{balanceDisplay}</p>
+            <p class="hero-note">Credits never expire.</p>
+          </div>
+
+          <Button
+            variant="accent"
+            id="topup-trigger"
+            disabled={!canTopup}
+            title={!canTopup ? 'Only workspace admins can add credits' : undefined}
+          >
+            <Icon svg={plus} size={16} />
+            Top up
+          </Button>
+        </div>
+
+        <div class="billing-grid">
+          <section class:list={['spend-section', layout === 'new' && 'card']}>
+            <div class="section-header">
+              <h2 class="section-title">Spend this month</h2>
+              <p class="section-stat">{spendDisplay}</p>
+            </div>
+
+            <SpendChart
+              dailyData={dailyData}
+              maxCumulative={maxCumulative}
+              daysInMonth={daysInMonth}
+              spendDisplay={spendDisplay}
+              breakdownRows={breakdownRows}
+            />
+          </section>
+
+          <section class:list={['tx-section', layout === 'new' && 'card']}>
+            <h2 class="section-title">Recent transactions</h2>
+
+            {recentTransactions.length > 0 ? (
+              <ul class="tx-list">
+                {recentTransactions.map((tx) => {
+                  const amount = parseFloat(tx.deltaUsd);
+                  const isPositive = amount > 0;
+                  return (
+                    <li class="tx-row">
+                      <div class="tx-info">
+                        <span class="tx-label">{txLabel(tx.kind)}</span>
+                        <span class="tx-date">{formatDateShort(tx.createdAt)}</span>
+                      </div>
+                      <span class:list={['tx-amount', isPositive ? 'tx-positive' : 'tx-negative']}>
+                        {isPositive ? '+' : ''}
+                        {formatUsd(amount)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p class="text-sm text-fg-2">No transactions yet.</p>
+            )}
+          </section>
+        </div>
+
+        {canTopup && <TopupDialog />}
+
+        {allLedger.filter((e) => e.kind === 'RUN_DEBIT').length > 0 && (
+          <section class="usage-section">
+            <h2 class="section-title">Usage by agent</h2>
+            <p class="text-sm text-fg-2">Agent-level breakdown will appear once runs accumulate.</p>
+          </section>
+        )}
+      </div>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .billing-page {
+    max-width: 1000px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-7);
+  }
+
+  .billing-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--ms-space-3);
+    padding-bottom: var(--ms-space-5);
+    border-bottom: 1px solid var(--ms-border-subtle);
+  }
+
+  .hero-balance {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--ms-space-1);
+  }
+
+  .hero-sublabel {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-3);
+  }
+
+  .hero-amount {
+    font-family: var(--ms-font-mono);
+    font-size: 3rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--ms-fg-1);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (min-width: 640px) {
+    .hero-amount {
+      font-size: 3.5rem;
+    }
+  }
+
+  .hero-note {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-3);
+  }
+
+  .billing-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ms-space-6);
+  }
+
+  @media (min-width: 768px) {
+    .billing-grid {
+      grid-template-columns: 3fr 2fr;
+    }
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--ms-space-3);
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .section-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .section-stat {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tx-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+  }
+
+  .tx-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tx-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ms-space-3);
+    padding: var(--ms-space-2) 0;
+    border-bottom: 1px solid var(--ms-border-subtle);
+  }
+
+  .tx-row:last-child {
+    border-bottom: none;
+  }
+
+  .tx-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .tx-label {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-1);
+    font-weight: 500;
+  }
+
+  .tx-date {
+    font-size: 0.6875rem;
+    color: var(--ms-fg-3);
+  }
+
+  .tx-amount {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .tx-positive {
+    color: var(--ms-ok);
+  }
+
+  .tx-negative {
+    color: var(--ms-fg-1);
+  }
+
+  .usage-section {
+    padding-top: var(--ms-space-5);
+    border-top: 1px solid var(--ms-border-subtle);
+  }
+</style>
+
+<script is:inline src="/scripts/billing.js"></script>

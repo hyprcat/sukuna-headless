@@ -1,0 +1,180 @@
+---
+import AgentBadge from '../ui/AgentBadge.astro';
+import Icon from '../ui/Icon.astro';
+import fileText from 'lucide-static/icons/file-text.svg?raw';
+import database from 'lucide-static/icons/database.svg?raw';
+import globe from 'lucide-static/icons/globe.svg?raw';
+import { formatSize, timeAgo } from '../../lib/format';
+
+interface Props {
+  id: string;
+  name: string;
+  description: string;
+  kind: string;
+  fileName: string;
+  fileSizeBytes: number | null;
+  contentType: string;
+  sourceEndpoint: string;
+  isActive: boolean;
+  updatedAt: string;
+  lastIndexedAt: string | null;
+  agents: string[];
+}
+
+const {
+  id,
+  name,
+  description,
+  kind,
+  fileName,
+  fileSizeBytes,
+  contentType,
+  sourceEndpoint,
+  isActive,
+  updatedAt,
+  lastIndexedAt,
+  agents,
+} = Astro.props;
+
+const kindIcon: Record<string, string> = {
+  DOCUMENT: fileText,
+  DATASET: database,
+  CONNECTED_SOURCE: globe,
+};
+---
+
+<button
+  type="button"
+  class="kb-card"
+  data-inactive={String(!isActive)}
+  data-kb-id={id}
+  data-kb-name={name}
+  data-kb-description={description}
+  data-kb-kind={kind}
+  data-kb-filename={fileName}
+  data-kb-filesize={String(fileSizeBytes ?? '')}
+  data-kb-contenttype={contentType}
+  data-kb-endpoint={sourceEndpoint}
+  data-kb-active={String(isActive)}
+  data-kb-updated={updatedAt}
+  data-kb-indexed={lastIndexedAt ?? ''}
+  data-kb-agents={JSON.stringify(agents)}
+>
+  <div class="card-icon">
+    <Icon svg={kindIcon[kind] ?? fileText} size={24} />
+  </div>
+  <div class="card-body">
+    <p class="card-title">{name}</p>
+    <p class="card-desc">{description || 'No description'}</p>
+    <p class="card-stats">
+      {formatSize(fileSizeBytes)} · {timeAgo(updatedAt)}
+      {
+        agents.length > 0 && (
+          <span>
+            {' '}
+            · used by {agents.length} agent{agents.length !== 1 ? 's' : ''}
+          </span>
+        )
+      }
+    </p>
+    {
+      agents.length > 0 && (
+        <div class="card-agents">
+          {agents.slice(0, 3).map((a) => (
+            <AgentBadge name={a} />
+          ))}
+          {agents.length > 3 && <span class="agent-more">+{agents.length - 3} more</span>}
+        </div>
+      )
+    }
+  </div>
+</button>
+
+<style>
+  .kb-card {
+    display: flex;
+    gap: var(--ms-space-3);
+    width: 100%;
+    text-align: left;
+    padding: var(--ms-space-4);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-canvas);
+    cursor: pointer;
+    transition:
+      border-color var(--ms-t-color) var(--ms-ease-out),
+      box-shadow var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .kb-card:hover {
+    border-color: var(--ms-border-default);
+  }
+
+  :global(.kb-card[aria-pressed='true']) {
+    border-color: var(--ms-accent);
+    box-shadow: var(--ms-shadow-1);
+  }
+
+  .card-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-sunken);
+    color: var(--ms-fg-2);
+  }
+
+  .card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-1);
+  }
+
+  .card-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-desc {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-stats {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+  }
+
+  .card-agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ms-space-1);
+    margin-top: var(--ms-space-1);
+  }
+
+  .agent-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-bg-sunken);
+    color: var(--ms-fg-2);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+</style>

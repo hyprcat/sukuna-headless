@@ -1,0 +1,230 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import Button from '../components/ui/Button.astro';
+import MasterDetail from '../components/ui/MasterDetail.astro';
+import ShieldDoodle from '../components/doodles/ShieldDoodle.astro';
+import PolicyCard from '../components/policies/PolicyCard.astro';
+import PolicyEditor from '../components/policies/PolicyEditor.astro';
+import search from 'lucide-static/icons/search.svg?raw';
+import plus from 'lucide-static/icons/plus.svg?raw';
+import { gql } from '../lib/graphql';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+
+interface PolicyNode {
+  id: string;
+  name: string;
+  actionRestrictions: string[];
+  domainRestrictions: string[];
+  outputRestrictions: string[];
+}
+
+interface AgentNode {
+  id: string;
+  name: string;
+  policy: { id: string }[];
+}
+
+interface PoliciesPageData {
+  policies: { edges: { node: PolicyNode }[] };
+  agents: { edges: { node: AgentNode }[] };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const apiUrl = clientApiUrl;
+
+const { data, errors } = await gql<PoliciesPageData>(
+  `query PoliciesPage {
+    policies(first: 100) {
+      edges { node {
+        id name actionRestrictions domainRestrictions outputRestrictions
+      } }
+    }
+    agents(first: 100) {
+      edges { node { id name policy { id } } }
+    }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const policies = data?.policies?.edges?.map((e) => e.node) ?? [];
+const agents = data?.agents?.edges?.map((e) => e.node) ?? [];
+const hasPolicies = policies.length > 0;
+
+const policyAgentMap = new Map<string, string[]>();
+for (const agent of agents) {
+  if (agent.policy.length === 1) {
+    const policyId = agent.policy[0].id;
+    const existing = policyAgentMap.get(policyId) ?? [];
+    existing.push(agent.name);
+    policyAgentMap.set(policyId, existing);
+  }
+}
+
+const allAgentInfo = agents.map((a) => ({
+  id: a.id,
+  name: a.name,
+  policyOverrideId: a.policy.length === 1 ? a.policy[0].id : null,
+}));
+
+const hasError = !!errors;
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canWrite = canAction(role, Action.POLICIES_WRITE);
+const layout = Astro.locals.layout;
+---
+
+<DashboardLayout title="Policies · midsphere" current="policies">
+  <div id="api-config" data-url={apiUrl} data-ws={wsSlug ?? ''} hidden></div>
+
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && (
+      <MasterDetail listWidth="45%" detailLabel="Policy editor">
+        <div class="policies-list-panel" slot="list">
+          {layout === 'new' ? (
+            <div class="flex flex-col gap-1">
+              <h1 class="text-2xl font-semibold leading-tight tracking-tight text-fg-1">
+                <span class="hl">Policies</span>
+              </h1>
+              <p class="text-sm text-fg-2">What your agent is and isn't allowed to do.</p>
+            </div>
+          ) : (
+            <>
+              <h1 class="text-xl font-semibold tracking-tight text-fg-1">
+                <span class="hl">Policies</span>
+              </h1>
+              <p class="page-desc">What your agent is and isn't allowed to do.</p>
+            </>
+          )}
+
+          <div class="policies-toolbar">
+            <form role="search" class="policies-search">
+              <Icon svg={search} size={16} class="search-icon" />
+              <input
+                type="search"
+                id="policy-search"
+                aria-label="Search policies"
+                placeholder="Search policies…"
+                class="search-input"
+                autocomplete="off"
+              />
+            </form>
+            {canWrite && (
+              <Button variant="accent" id="new-policy-btn">
+                <Icon svg={plus} size={16} />
+                New policy
+              </Button>
+            )}
+          </div>
+
+          {hasPolicies ? (
+            <div class="policy-list" id="policy-list">
+              {policies.map((p) => (
+                <PolicyCard
+                  id={p.id}
+                  name={p.name}
+                  actionRestrictions={p.actionRestrictions}
+                  domainRestrictions={p.domainRestrictions}
+                  outputRestrictions={p.outputRestrictions}
+                  agents={policyAgentMap.get(p.id) ?? []}
+                />
+              ))}
+            </div>
+          ) : (
+            <div class="policy-list" id="policy-list">
+              <EmptyState
+                heading="No policies yet"
+                body={`Define what your agents <span class="hl">can and can't do</span> — guardrails enforced at runtime.`}
+              >
+                <ShieldDoodle size={64} slot="doodle" />
+                {canWrite && (
+                  <Button variant="accent" id="new-policy-empty">
+                    <Icon svg={plus} size={16} />
+                    New policy
+                  </Button>
+                )}
+              </EmptyState>
+            </div>
+          )}
+        </div>
+
+        <Fragment slot="detail">
+          <div id="editor-panel" data-can-write={canWrite ? 'true' : 'false'} hidden>
+            <PolicyEditor agents={allAgentInfo} canWrite={canWrite} />
+          </div>
+
+          <div
+            class:list={[
+              layout === 'new'
+                ? 'hidden flex-col items-center justify-center py-12 text-center lg:flex'
+                : 'policies-editor-placeholder',
+            ]}
+            id="editor-placeholder"
+          >
+            <ShieldDoodle size={48} class="doodle-float" />
+            <p class="mt-3 text-sm text-fg-2">Pick a policy to see what it enforces.</p>
+          </div>
+        </Fragment>
+      </MasterDetail>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .page-desc {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    margin-top: calc(-1 * var(--ms-space-2));
+  }
+
+  .policies-list-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+  }
+
+  .policies-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  .policies-search {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .policy-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+  }
+
+  .policies-editor-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--ms-space-9) var(--ms-space-5);
+    border: 1px dashed var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+    text-align: center;
+  }
+
+  @media (max-width: 1023px) {
+    .policies-editor-placeholder {
+      display: none;
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/policies.js"></script>

@@ -1,0 +1,89 @@
+---
+import Icon from '../ui/Icon.astro';
+import AgentBadge from '../ui/AgentBadge.astro';
+import DataTable from '../ui/DataTable.astro';
+import StarRating from '../ui/StarRating.astro';
+import { initial } from '../../lib/format';
+import { statusIcon, statusTone, circleCheck } from '../../lib/run-status';
+import type { RunNode } from '../../lib/types';
+
+interface Props {
+  runs: RunNode[];
+  formatDuration: (start: string | null, end: string | null) => string;
+  timeAgo: (iso: string) => string;
+}
+
+const { runs, formatDuration, timeAgo } = Astro.props;
+---
+
+<DataTable label="Run history">
+  <tr slot="head">
+    <th>Run</th>
+    <th>Status</th>
+    <th>Agent</th>
+    <th>Duration</th>
+    <th>Tokens</th>
+    <th>Cost</th>
+    <th>Rating</th>
+    <th>When</th>
+  </tr>
+  {
+    runs.map((run) => (
+      <tr
+        class="runs-row"
+        data-status={run.status.toLowerCase()}
+        data-search={`${run.runUid} ${run.agentName} ${run.endUserIdExternal} ${run.promptPreview}`.toLowerCase()}
+      >
+        <td data-label="Run">
+          <a href={`/runs/${run.runUid}`} class="flex items-center gap-3 no-underline">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-pill bg-sunken text-xs font-medium text-fg-2">
+              {initial(run.endUserIdExternal)}
+            </span>
+            <span class="min-w-0">
+              <span class="block font-mono text-xs text-fg-1">{run.runUid.slice(0, 8)}</span>
+              <span class="block max-w-[240px] truncate text-xs font-normal text-fg-3">
+                {run.promptPreview || run.endUserIdExternal}
+              </span>
+            </span>
+          </a>
+        </td>
+        <td data-label="Status">
+          <span class="inline-flex items-center gap-1.5">
+            <Icon
+              svg={statusIcon[run.status] ?? circleCheck}
+              size={16}
+              class={statusTone[run.status] ?? 'text-fg-2'}
+            />
+            {run.status.charAt(0).toUpperCase() + run.status.slice(1).toLowerCase()}
+          </span>
+        </td>
+        <td data-label="Agent">
+          <a href={`/runs/${run.runUid}`} class="inline-flex no-underline">
+            <AgentBadge name={run.agentName} />
+          </a>
+        </td>
+        <td data-label="Duration">
+          <span class="font-mono text-xs text-fg-3">
+            {formatDuration(run.startedAt, run.finishedAt)}
+          </span>
+        </td>
+        <td data-label="Tokens">
+          <span class="font-mono text-xs text-fg-3">{run.totalTokens.toLocaleString()}</span>
+        </td>
+        <td data-label="Cost">
+          <span class="font-mono text-xs text-fg-2">${run.totalCost.toFixed(3)}</span>
+        </td>
+        <td data-label="Rating">
+          {run.rating ? (
+            <StarRating score={run.rating.score} size={12} />
+          ) : (
+            <span class="text-xs text-fg-3">-</span>
+          )}
+        </td>
+        <td data-label="When" class="text-xs text-fg-3">
+          {timeAgo(run.createdAt)}
+        </td>
+      </tr>
+    ))
+  }
+</DataTable>

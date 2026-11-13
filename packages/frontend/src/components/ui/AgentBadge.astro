@@ -1,0 +1,45 @@
+---
+interface Props {
+  name: string;
+  class?: string;
+}
+
+const { name, class: cls = '', ...rest } = Astro.props;
+---
+
+<span {...rest} data-agent-badge data-agent-name={name} class:list={['agent-badge', cls]}>
+  <span class="agent-dot" aria-hidden="true"></span>
+  <span class="agent-name">{name}</span>
+</span>
+
+<style>
+  .agent-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 12rem;
+    padding: 2px 8px;
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-bg-canvas);
+    color: var(--ms-fg-2);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .agent-dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--ms-accent);
+  }
+
+  .agent-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>

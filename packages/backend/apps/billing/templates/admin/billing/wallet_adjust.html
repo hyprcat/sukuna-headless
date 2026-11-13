@@ -1,0 +1,49 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="px-4 lg:px-8">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label='billing' %}">{% trans 'Billing' %}</a>
+  &rsaquo; <a href="{% url 'admin:billing_creditwallet_changelist' %}">{% trans 'Credit wallets' %}</a>
+  &rsaquo; <a href="{% url 'admin:billing_creditwallet_change' wallet.pk %}">{{ wallet }}</a>
+  &rsaquo; {% trans 'Adjust' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 lg:px-8 py-6 max-w-xl">
+  <h1 class="text-xl font-medium mb-2">{% trans "Manual adjustment" %}</h1>
+  <p class="text-sm mb-6">
+    {% trans "Wallet" %}: <strong>{{ wallet }}</strong>
+    &middot; {% trans "Current balance" %}: <strong>${{ wallet.balance_usd }}</strong>
+  </p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="text-red-700 mb-3">{{ form.non_field_errors }}</div>
+    {% endif %}
+    {% for field in form %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+          <p class="text-xs mt-1 text-gray-600">{{ field.help_text }}</p>
+        {% endif %}
+        {% if field.errors %}
+          <p class="text-xs mt-1 text-red-700">{{ field.errors|join:', ' }}</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+    <div class="flex gap-2 mt-6">
+      <button type="submit" class="bg-primary-500 text-base-900 px-4 py-2 rounded-md font-medium">
+        {% trans "Apply adjustment" %}
+      </button>
+      <a href="{% url 'admin:billing_creditwallet_change' wallet.pk %}" class="px-4 py-2 rounded-md border">
+        {% trans "Cancel" %}
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

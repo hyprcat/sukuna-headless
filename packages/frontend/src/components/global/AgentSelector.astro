@@ -1,0 +1,77 @@
+---
+import Icon from '../ui/Icon.astro';
+import chevronDown from 'lucide-static/icons/chevron-down.svg?raw';
+import flaskConical from 'lucide-static/icons/flask-conical.svg?raw';
+
+interface Props {
+  agentName?: string;
+  agents?: Array<{ id: string; name: string }>;
+}
+
+const { agentName = 'Select agent', agents = [] } = Astro.props;
+---
+
+<div class="relative w-full lg:w-auto" data-agent-selector>
+  <button
+    type="button"
+    aria-haspopup="menu"
+    aria-expanded="false"
+    aria-label={`Agent: ${agentName}`}
+    class="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-border-default bg-canvas px-3 text-sm font-medium text-fg-1 motion-safe:transition-colors motion-safe:duration-150 hover:border-border-strong lg:h-10 lg:min-w-[190px]"
+    data-agent-trigger
+  >
+    <span class="flex min-w-0 items-center gap-2">
+      <Icon svg={flaskConical} size={18} class="shrink-0 text-fg-1" />
+      <span class="truncate">{agentName}</span>
+    </span>
+    <Icon svg={chevronDown} size={14} class="shrink-0 text-fg-1" />
+  </button>
+
+  <div
+    class="absolute left-0 top-full z-50 mt-1 hidden min-w-[220px] rounded-lg border border-border-default bg-canvas py-1 shadow-2"
+    data-agent-menu
+    role="menu"
+    aria-label="Select agent"
+  >
+    {
+      agents.map((agent) => {
+        const active = agent.name === agentName;
+        return (
+          <a
+            href={`/agents/${agent.id}`}
+            role="menuitem"
+            tabindex="-1"
+            data-agent-item
+            class={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken ${active ? 'font-medium text-fg-1' : 'text-fg-2'}`}
+          >
+            <span class="truncate">{agent.name}</span>
+          </a>
+        );
+      })
+    }
+
+    {agents.length > 0 && <div class="my-1 border-t border-border-subtle" role="separator" />}
+
+    <a
+      href="/agents"
+      role="menuitem"
+      tabindex="-1"
+      data-agent-item
+      class="flex items-center gap-3 px-3 py-2 text-sm text-fg-2 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken hover:text-fg-1"
+    >
+      View all agents
+    </a>
+  </div>
+</div>
+
+<script>
+  import { initDropdown } from '../../lib/dropdown';
+
+  document.querySelectorAll('[data-agent-selector]').forEach((el) =>
+    initDropdown(el, {
+      trigger: '[data-agent-trigger]',
+      menu: '[data-agent-menu]',
+      items: '[data-agent-item]',
+    }),
+  );
+</script>

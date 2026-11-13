@@ -1,0 +1,333 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Icon from '../../components/ui/Icon.astro';
+import ErrorBanner from '../../components/ui/ErrorBanner.astro';
+import StarRating from '../../components/ui/StarRating.astro';
+import RunTimeline from '../../components/runs/RunTimeline.astro';
+import RunSidebar from '../../components/runs/RunSidebar.astro';
+import RunConversationNav from '../../components/runs/RunConversationNav.astro';
+import type { ConversationRun } from '../../components/runs/RunConversationNav.astro';
+import { statusIcon, statusTone, circleCheck } from '../../lib/run-status';
+import { formatDuration, timeAgo } from '../../lib/format';
+import { gql } from '../../lib/graphql';
+import type { RunEvent } from '../../lib/run-events';
+import chevronRight from 'lucide-static/icons/chevron-right.svg?raw';
+
+interface Conversation {
+  conversationUid: string;
+  title: string;
+  runs: { edges: { node: ConversationRun }[] };
+}
+
+interface RunDetail {
+  id: string;
+  runUid: string;
+  status: string;
+  agentId: string;
+  agentName: string;
+  endUserIdExternal: string;
+  promptPreview: string;
+  summary: string;
+  errorMessage: string;
+  totalCost: number;
+  totalTokens: number;
+  isScheduled: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  lastCallbackAt: string | null;
+  rating: { score: number; comment: string } | null;
+  conversation: Conversation | null;
+  events: { totalCount: number; edges: { node: RunEvent }[] };
+}
+
+const { id } = Astro.params;
+const layout = Astro.locals.layout;
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+
+const { data, errors } = await gql<{ run: RunDetail | null }>(
+  `query Run($runUid: UUID!) {
+    run(runUid: $runUid) {
+      id runUid status agentId agentName endUserIdExternal
+      promptPreview summary errorMessage
+      totalCost totalTokens isScheduled
+      startedAt finishedAt createdAt lastCallbackAt
+      rating { score comment }
+      conversation {
+        conversationUid title
+        runs(first: 50) {
+          edges { node { runUid status promptPreview } }
+        }
+      }
+      events(first: 100) {
+        totalCount
+        edges { node { sequenceNo eventType payload } }
+      }
+    }
+  }`,
+  { runUid: id },
+  cookie,
+  wsSlug,
+);
+
+// totalCost arrives as a string (GraphQL Decimal scalar); coerce to number.
+const run = data?.run ? { ...data.run, totalCost: Number(data.run.totalCost) } : data?.run;
+const hasError = !!errors;
+const events = run?.events?.edges?.map((e) => e.node) ?? [];
+const shortUid = run?.runUid.slice(0, 8) ?? '';
+const isActive = run ? ['QUEUED', 'RUNNING'].includes(run.status) : false;
+const conversation = run?.conversation ?? null;
+const conversationRuns = conversation?.runs?.edges?.map((e) => e.node) ?? [];
+const lastUpdated = run?.lastCallbackAt ? `Last updated ${timeAgo(run.lastCallbackAt)}` : '';
+---
+
+<DashboardLayout title={run ? `Run ${shortUid} · midsphere` : 'Run · midsphere'} current="runs">
+  <div class="run-detail">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/runs">Runs</a>
+      <Icon svg={chevronRight} size={14} class="breadcrumb-sep" />
+      <span aria-current="page">Run #{shortUid}</span>
+    </nav>
+
+    {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+    {
+      !run && !hasError && (
+        <ErrorBanner message="Run not found. It may have been removed, or you don't have access." />
+      )
+    }
+
+    {
+      run && (
+        <div
+          class="run-body"
+          data-run-live
+          data-run-uid={run.runUid}
+          data-status={run.status}
+          data-event-count={run.events.totalCount}
+          data-last-callback-at={run.lastCallbackAt ?? ''}
+        >
+          <header class="run-header">
+            {conversation && (
+              <p class="run-conversation-title">{conversation.title || 'Conversation'}</p>
+            )}
+            <h1 class="run-title">
+              <span class="run-user">{run.endUserIdExternal}</span>
+              <span class="run-arrow" aria-hidden="true">
+                &rarr;
+              </span>
+              <span class="run-task">{run.promptPreview || 'Agent run'}</span>
+            </h1>
+            <div class="run-meta">
+              <span class="run-meta-status">
+                <Icon
+                  svg={statusIcon[run.status] ?? circleCheck}
+                  size={14}
+                  class={statusTone[run.status] ?? 'text-fg-2'}
+                />
+                {run.status.charAt(0).toUpperCase() + run.status.slice(1).toLowerCase()}
+              </span>
+              <span class="run-meta-sep" aria-hidden="true">
+                &middot;
+              </span>
+              <span>{formatDuration(run.startedAt, run.finishedAt)}</span>
+              <span class="run-meta-sep" aria-hidden="true">
+                &middot;
+              </span>
+              <span>${run.totalCost.toFixed(2)}</span>
+              {run.rating && (
+                <>
+                  <span class="run-meta-sep" aria-hidden="true">
+                    &middot;
+                  </span>
+                  <StarRating score={run.rating.score} size={14} />
+                </>
+              )}
+              {isActive && (
+                <>
+                  <span class="run-meta-sep" aria-hidden="true">
+                    &middot;
+                  </span>
+                  <span class="run-updated" data-last-updated>
+                    {lastUpdated}
+                  </span>
+                </>
+              )}
+            </div>
+          </header>
+
+          <div class="run-columns">
+            <div class:list={['run-main', layout === 'new' && 'card']}>
+              {conversation && conversationRuns.length > 1 && (
+                <RunConversationNav
+                  title={conversation.title}
+                  runs={conversationRuns}
+                  currentUid={run.runUid}
+                />
+              )}
+              <RunTimeline events={events} />
+            </div>
+            {layout === 'new' ? (
+              <div class="card">
+                <RunSidebar
+                  totalCost={run.totalCost}
+                  totalTokens={run.totalTokens}
+                  summary={run.summary}
+                  errorMessage={run.errorMessage}
+                  isScheduled={run.isScheduled}
+                  startedAt={run.startedAt}
+                  finishedAt={run.finishedAt}
+                  rating={run.rating}
+                  agentId={run.agentId}
+                  agentName={run.agentName}
+                  runUid={run.runUid}
+                  eventCount={run.events.totalCount}
+                  createdAt={run.createdAt}
+                  layout={layout}
+                />
+              </div>
+            ) : (
+              <RunSidebar
+                totalCost={run.totalCost}
+                totalTokens={run.totalTokens}
+                summary={run.summary}
+                errorMessage={run.errorMessage}
+                isScheduled={run.isScheduled}
+                startedAt={run.startedAt}
+                finishedAt={run.finishedAt}
+                rating={run.rating}
+                agentId={run.agentId}
+                layout={layout}
+              />
+            )}
+          </div>
+        </div>
+      )
+    }
+  </div>
+
+  <script is:inline src="/scripts/run-detail.js"></script>
+</DashboardLayout>
+
+<style>
+  .run-detail {
+    max-width: 1200px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-6);
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    font-size: 0.875rem;
+    color: var(--ms-fg-3);
+  }
+
+  .breadcrumb a {
+    color: var(--ms-fg-2);
+    text-decoration: none;
+    transition: color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .breadcrumb a:hover {
+    color: var(--ms-fg-1);
+  }
+
+  .breadcrumb [aria-current] {
+    color: var(--ms-fg-1);
+    font-weight: 500;
+  }
+
+  .run-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-6);
+  }
+
+  .run-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .run-conversation-title {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+    font-weight: 500;
+  }
+
+  .run-updated {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .run-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+    line-height: 1.3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--ms-space-2);
+  }
+
+  .run-user {
+    font-family: var(--ms-font-mono);
+    font-size: 1rem;
+    color: var(--ms-fg-2);
+  }
+
+  .run-arrow {
+    color: var(--ms-fg-3);
+    font-weight: 400;
+  }
+
+  .run-task {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .run-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ms-space-2);
+    font-size: 0.8125rem;
+    color: var(--ms-fg-3);
+  }
+
+  .run-meta-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .run-meta-sep {
+    color: var(--ms-fg-3);
+  }
+
+  .run-columns {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ms-space-8);
+  }
+
+  .run-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-6);
+    min-width: 0;
+  }
+
+  @media (min-width: 768px) {
+    .run-columns {
+      grid-template-columns: 3fr 2fr;
+    }
+  }
+</style>

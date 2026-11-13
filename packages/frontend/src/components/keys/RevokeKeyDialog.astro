@@ -1,0 +1,45 @@
+---
+import Button from '../ui/Button.astro';
+---
+
+<dialog
+  id="dlg-revoke"
+  aria-labelledby="dlg-revoke-title"
+  class="m-auto w-full max-w-sm rounded-xl bg-canvas p-0 shadow-lg backdrop:bg-black/40"
+>
+  <div class="p-6">
+    <h2 id="dlg-revoke-title" class="text-lg font-medium tracking-tight text-fg-1">Revoke key</h2>
+    <p class="mt-2 text-sm text-fg-2">
+      You're about to revoke <strong id="revoke-key-name" class="text-fg-1"></strong>
+      (<code id="revoke-key-prefix" class="font-mono text-xs text-fg-2"></code>). This is permanent.
+    </p>
+
+    <form id="form-revoke" class="mt-5 flex flex-col gap-4" aria-describedby="revoke-error">
+      <input type="hidden" name="keyId" id="revoke-key-id" />
+      <div class="flex flex-col gap-2">
+        <label for="revoke-reason" class="text-sm font-medium text-fg-1">Reason (optional)</label>
+        <input
+          id="revoke-reason"
+          name="reason"
+          type="text"
+          placeholder="Why are you revoking this key?"
+          class="input"
+        />
+      </div>
+
+      <div
+        id="revoke-error"
+        class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+        role="alert"
+      >
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-1">
+        <Button variant="ghost" id="btn-cancel-revoke">Cancel</Button>
+        <Button variant="primary" type="submit" class="!bg-err !text-white hover:!bg-err/90"
+          >Revoke</Button
+        >
+      </div>
+    </form>
+  </div>
+</dialog>

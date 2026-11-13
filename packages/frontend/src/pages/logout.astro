@@ -1,0 +1,20 @@
+---
+import { apiPost } from '../lib/api';
+
+if (Astro.request.method === 'POST') {
+  const result = await apiPost(
+    '/auth/logout/',
+    {},
+    Astro.request.headers.get('cookie') ?? undefined,
+  );
+  const res = Astro.redirect('/login');
+  if (result.setCookie) {
+    for (const c of result.setCookie) {
+      res.headers.append('Set-Cookie', c);
+    }
+  }
+  return res;
+}
+
+return Astro.redirect('/login');
+---

@@ -1,0 +1,521 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import StatusBadge from '../../components/ui/StatusBadge.astro';
+import StatTile from '../../components/ui/StatTile.astro';
+import ProgressBar from '../../components/ui/ProgressBar.astro';
+import InsightList from '../../components/ui/InsightList.astro';
+import ActivityTable from '../../components/ui/ActivityTable.astro';
+import Icon from '../../components/ui/Icon.astro';
+import ErrorBanner from '../../components/ui/ErrorBanner.astro';
+import arrowLeft from 'lucide-static/icons/arrow-left.svg?raw';
+import coins from 'lucide-static/icons/coins.svg?raw';
+import activity from 'lucide-static/icons/activity.svg?raw';
+import timer from 'lucide-static/icons/timer.svg?raw';
+import gauge from 'lucide-static/icons/gauge.svg?raw';
+import layers from 'lucide-static/icons/layers.svg?raw';
+import externalLink from 'lucide-static/icons/external-link.svg?raw';
+import { gql } from '../../lib/graphql';
+import { initial, formatDateShort } from '../../lib/format';
+
+function relayPk(globalId: string): number {
+  try {
+    return parseInt(atob(globalId).split(':')[1], 10);
+  } catch {
+    return parseInt(globalId, 10);
+  }
+}
+
+function formatSandboxTime(seconds: number | null): string {
+  if (seconds === null || seconds === 0) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+function capLabel(used: number, limit: number | null): string {
+  if (limit === null) return '∞';
+  return `${used} / ${limit}`;
+}
+
+interface ControlProfile {
+  credits: number;
+  creditGrantPerPeriod: number;
+  runCountLimit: number | null;
+  runCountPeriod: string;
+  runsUsedInPeriod: number;
+  sandboxTimeSeconds: number | null;
+  concurrencyMax: number | null;
+  modelTier: string;
+  creditRefreshSchedule: string | null;
+}
+
+interface EndUserDetail {
+  id: string;
+  externalUserId: string;
+  displayName: string;
+  tierLabel: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  runCount: number;
+  metadata: Record<string, unknown> | null;
+  controls: ControlProfile | null;
+}
+
+interface InsightNode {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+  affectedEndUserIds: number[] | null;
+}
+
+interface RunNode {
+  id: string;
+  runUid: string;
+  status: string;
+  promptPreview: string;
+  agentName: string;
+  endUserIdExternal: string;
+  totalCost: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  rating: { score: number } | null;
+}
+
+interface EndUserDetailData {
+  endUser: EndUserDetail | null;
+  insights: { edges: { node: InsightNode }[] };
+  runs: { edges: { node: RunNode }[] };
+}
+
+const layout = Astro.locals.layout;
+const isNew = layout === 'new';
+const { id } = Astro.params;
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const euDbId = relayPk(id!);
+
+const { data, errors } = await gql<EndUserDetailData>(
+  `query EndUserDetail($id: ID!, $endUserDbId: Int) {
+    endUser(id: $id) {
+      id externalUserId displayName tierLabel
+      isActive createdAt updatedAt runCount metadata
+      controls {
+        credits creditGrantPerPeriod
+        runCountLimit runCountPeriod runsUsedInPeriod
+        sandboxTimeSeconds concurrencyMax modelTier
+        creditRefreshSchedule
+      }
+    }
+    insights(status: "active", first: 10) {
+      edges { node { id category title body affectedEndUserIds } }
+    }
+    runs(endUserId: $endUserDbId, first: 8) {
+      edges { node {
+        id runUid status promptPreview agentName endUserIdExternal
+        totalCost startedAt finishedAt createdAt
+        rating { score }
+      } }
+    }
+  }`,
+  { id, endUserDbId: euDbId },
+  cookie,
+  wsSlug,
+);
+
+const eu = data?.endUser;
+const hasError = !!errors;
+const allInsights = data?.insights?.edges?.map((e) => e.node) ?? [];
+const userInsights = allInsights.filter(
+  (i) => Array.isArray(i.affectedEndUserIds) && i.affectedEndUserIds.includes(euDbId),
+);
+const runs = data?.runs?.edges?.map((e) => e.node) ?? [];
+
+const displayName = eu?.displayName || eu?.externalUserId || 'Unknown';
+const controls = eu?.controls;
+const metaEntries = eu?.metadata ? Object.entries(eu.metadata) : [];
+const hasCreditsGrant = controls && controls.creditGrantPerPeriod > 0;
+const tierIsFree = eu?.tierLabel?.toLowerCase() === 'free';
+---
+
+<DashboardLayout
+  title={eu ? `${displayName} · midsphere` : 'End User · midsphere'}
+  current="end-users"
+>
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !eu && !hasError && (
+      <ErrorBanner message="End user not found. They may have been removed, or you don't have access." />
+    )
+  }
+
+  {
+    eu && (
+      <div class="eud-layout">
+        {/* ---- Left column ---- */}
+        <div class="eud-main">
+          {/* Breadcrumb */}
+          <nav aria-label="Breadcrumb" class="eud-breadcrumb">
+            <a href="/end-users" class="eud-back-link">
+              <Icon svg={arrowLeft} size={14} />
+              End Users
+            </a>
+            <span class="eud-breadcrumb-sep" aria-hidden="true">
+              /
+            </span>
+            <span class="eud-breadcrumb-current">{eu.externalUserId}</span>
+          </nav>
+
+          {/* Identity header */}
+          <div class="eud-identity">
+            <span
+              class:list={['avatar avatar-lg', eu.isActive ? 'avatar-active' : 'avatar-inactive']}
+            >
+              {initial(eu.displayName || eu.externalUserId)}
+            </span>
+
+            <div class="eud-identity-text">
+              <div class="eud-name-row">
+                <h1 class="eud-name">{displayName}</h1>
+                <StatusBadge status={eu.isActive ? 'active' : 'inactive'} />
+              </div>
+              <p class="eud-external-id">{eu.externalUserId}</p>
+              <p class="eud-joined">Joined {formatDateShort(eu.createdAt)}</p>
+            </div>
+          </div>
+
+          {/* Tier badge */}
+          <div class="eud-tier-row">
+            <span class:list={['eud-tier-badge', tierIsFree ? 'tier-free' : 'tier-paid']}>
+              {eu.tierLabel}
+            </span>
+            {controls?.modelTier && (
+              <span class="eud-model-tier">{controls.modelTier} model tier</span>
+            )}
+          </div>
+
+          {/* Stats row */}
+          <div class="eud-stats" aria-label="End user statistics">
+            <StatTile
+              label="Credits"
+              sublabel={hasCreditsGrant ? `of ${controls!.creditGrantPerPeriod}` : undefined}
+            >
+              <Icon svg={coins} size={16} slot="icon" />
+              {controls?.credits ?? 0}
+            </StatTile>
+
+            {hasCreditsGrant && (
+              <div class="eud-stat-progress">
+                <ProgressBar
+                  name="Credits"
+                  value={controls!.credits}
+                  max={controls!.creditGrantPerPeriod}
+                  label={`${controls!.credits} / ${controls!.creditGrantPerPeriod}`}
+                />
+              </div>
+            )}
+
+            <StatTile label="Total runs">
+              <Icon svg={activity} size={16} slot="icon" />
+              {eu.runCount}
+            </StatTile>
+
+            <StatTile
+              label="Run cap"
+              sublabel={controls?.runCountPeriod ? `per ${controls.runCountPeriod}` : undefined}
+            >
+              <Icon svg={layers} size={16} slot="icon" />
+              {capLabel(controls?.runsUsedInPeriod ?? 0, controls?.runCountLimit ?? null)}
+            </StatTile>
+
+            <StatTile label="Sandbox time">
+              <Icon svg={timer} size={16} slot="icon" />
+              {formatSandboxTime(controls?.sandboxTimeSeconds ?? null)}
+            </StatTile>
+
+            <StatTile label="Concurrency">
+              <Icon svg={gauge} size={16} slot="icon" />
+              {controls?.concurrencyMax ?? '∞'}
+            </StatTile>
+          </div>
+
+          {/* Recent activity */}
+          <section class:list={['eud-activity', isNew && 'card p-5']} aria-label="Recent activity">
+            <div class="eud-section-header">
+              <h2 class="eud-section-title">Recent activity</h2>
+              <a href={`/runs?endUser=${eu.externalUserId}`} class="eud-view-all">
+                View all runs
+                <Icon svg={externalLink} size={12} />
+              </a>
+            </div>
+
+            <ActivityTable
+              runs={runs}
+              showAgent
+              showUser={false}
+              emptyMessage="No runs recorded yet. Activity will appear here once this user starts interacting."
+            />
+          </section>
+        </div>
+
+        {/* ---- Right sidebar ---- */}
+        <aside class="eud-sidebar">
+          {/* Metadata */}
+          <section aria-label="Metadata" class:list={[isNew && 'card p-5']}>
+            <h2 class="eud-section-title">Metadata</h2>
+            {metaEntries.length > 0 ? (
+              <dl class="eud-metadata-list">
+                {metaEntries.map(([key, value]) => (
+                  <div class="eud-meta-row">
+                    <dt class="eud-meta-key">{key}</dt>
+                    <dd class="eud-meta-value">{String(value ?? '—')}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p class="text-sm text-fg-2">No metadata set.</p>
+            )}
+          </section>
+
+          {/* Notes */}
+          <section aria-label="Notes" class:list={[isNew && 'card p-5']}>
+            <h2 class="eud-section-title">Notes</h2>
+            <p class="text-sm text-fg-2">No notes yet.</p>
+          </section>
+
+          {/* Insights scoped to this user */}
+          {layout !== 'new' && (
+            <section aria-label="End user insights">
+              <h2 class="eud-section-title">What I noticed</h2>
+              <InsightList
+                insights={userInsights}
+                emptyMessage="No insights for this user yet. Patterns will surface once there's enough activity."
+              />
+            </section>
+          )}
+        </aside>
+      </div>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  /* Two-column layout */
+  .eud-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ms-space-8);
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+
+  @media (min-width: 1024px) {
+    .eud-layout {
+      grid-template-columns: 65fr 35fr;
+      gap: var(--ms-space-12);
+    }
+  }
+
+  /* Main column */
+  .eud-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-6);
+    min-width: 0;
+  }
+
+  /* Breadcrumb */
+  .eud-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-2);
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+  }
+
+  .eud-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ms-space-1);
+    color: var(--ms-fg-2);
+    text-decoration: none;
+    transition: color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .eud-back-link:hover {
+    color: var(--ms-fg-1);
+  }
+
+  .eud-breadcrumb-sep {
+    color: var(--ms-fg-3);
+  }
+
+  .eud-breadcrumb-current {
+    color: var(--ms-fg-1);
+    font-family: var(--ms-font-mono);
+    font-size: 0.75rem;
+  }
+
+  /* Identity block */
+  .eud-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ms-space-4);
+  }
+
+  .eud-identity-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding-top: 4px;
+  }
+
+  .eud-name-row {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+    flex-wrap: wrap;
+  }
+
+  .eud-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--ms-fg-1);
+    letter-spacing: -0.01em;
+  }
+
+  .eud-external-id {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+    font-family: var(--ms-font-mono);
+  }
+
+  .eud-joined {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+    margin-top: 2px;
+  }
+
+  /* Tier row */
+  .eud-tier-row {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+  }
+
+  .eud-tier-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 16px;
+    border-radius: var(--ms-r-pill);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .eud-model-tier {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+  }
+
+  /* Stats row */
+  .eud-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ms-space-6);
+    align-items: flex-start;
+    padding: var(--ms-space-4) 0;
+    border-top: 1px solid var(--ms-border-subtle);
+    border-bottom: 1px solid var(--ms-border-subtle);
+  }
+
+  .eud-stat-progress {
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 4px;
+    min-width: 80px;
+    max-width: 120px;
+  }
+
+  /* Activity section */
+  .eud-activity {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+  }
+
+  .eud-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ms-space-3);
+  }
+
+  .eud-section-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .eud-view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ms-space-1);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+    text-decoration: none;
+    transition: color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .eud-view-all:hover {
+    color: var(--ms-fg-1);
+  }
+
+  .eud-activity-summary {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    line-height: 1.5;
+  }
+
+  /* Sidebar */
+  .eud-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-8);
+  }
+
+  /* Metadata list */
+  .eud-metadata-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+    margin-top: var(--ms-space-3);
+  }
+
+  .eud-meta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .eud-meta-key {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--ms-fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .eud-meta-value {
+    font-size: 0.875rem;
+    color: var(--ms-fg-1);
+    word-break: break-word;
+  }
+</style>

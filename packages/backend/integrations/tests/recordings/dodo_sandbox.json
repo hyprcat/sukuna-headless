@@ -1,0 +1,38 @@
+{
+  "checkout_session": {
+    "host": "test.checkout.dodopayments.com",
+    "scheme": "https",
+    "url_length": 72
+  },
+  "environment": "test_mode",
+  "payment_list_scan": {
+    "payments": [],
+    "product_ids": [
+      "pdt_0NeLZkFNpPIDSSiAAvDey",
+      "pdt_0NeLZkHi6hwWgpB0D3HIw",
+      "pdt_0NeLZkIWiPHpqj2nfMbYy",
+      "pdt_0NeLZkJJqRUXR3aU7CDaU"
+    ],
+    "statuses": [
+      "succeeded",
+      "failed"
+    ]
+  },
+  "recorded_at": "2026-05-07T21:18:56.207000+00:00",
+  "topup_product_ids": {
+    "100.00": "pdt_0NeLZkIWiPHpqj2nfMbYy",
+    "20.00": "pdt_0NeLZkFNpPIDSSiAAvDey",
+    "50.00": "pdt_0NeLZkHi6hwWgpB0D3HIw",
+    "500.00": "pdt_0NeLZkJJqRUXR3aU7CDaU"
+  },
+  "webhook": {
+    "filter_types": [
+      "payment.failed",
+      "payment.succeeded",
+      "refund.succeeded"
+    ],
+    "id": "ep_3DPfPcw0c1nUdt4wzSHltbpwuPr",
+    "secret_retrieved": true,
+    "url": "https://example.com/midsphere/dodo-webhook-recording"
+  }
+}

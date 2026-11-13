@@ -1,0 +1,123 @@
+---
+import Icon from '../ui/Icon.astro';
+import xIcon from 'lucide-static/icons/x.svg?raw';
+
+// Only sections that have a real page — iframing a 404 is worse than hiding it.
+// Add Integrations / Danger zone here once those pages exist.
+const SECTIONS = [
+  { id: 'workspace', label: 'Workspace', href: '/settings' },
+  { id: 'members', label: 'Members', href: '/workspace/members' },
+  { id: 'billing', label: 'Billing', href: '/billing' },
+  { id: 'keys', label: 'API Keys', href: '/keys' },
+] as const;
+---
+
+<div
+  data-settings-dialog
+  class="fixed inset-0 z-[60] hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Settings"
+>
+  <div data-settings-backdrop class="absolute inset-0 bg-black/40"></div>
+
+  <div class="absolute inset-0 grid place-items-center p-4">
+    <div
+      class="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-canvas shadow-2"
+    >
+      <header class="flex items-center justify-between border-b border-border-subtle px-5 py-3">
+        <h2 class="text-base font-semibold text-fg-1">Settings</h2>
+        <button
+          type="button"
+          data-settings-close
+          aria-label="Close settings"
+          class="grid h-9 w-9 place-items-center rounded-lg text-fg-2 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken hover:text-fg-1"
+        >
+          <Icon svg={xIcon} size={20} />
+        </button>
+      </header>
+
+      <div class="flex min-h-0 flex-1">
+        <nav
+          aria-label="Settings sections"
+          class="w-52 shrink-0 overflow-y-auto border-r border-border-subtle p-2"
+        >
+          {
+            SECTIONS.map((s) => (
+              <button
+                type="button"
+                data-settings-section
+                data-href={`${s.href}?bare=1`}
+                data-id={s.id}
+                class="flex w-full items-center border-l-2 border-transparent px-3 py-2 text-left text-sm text-fg-2 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken hover:text-fg-1"
+              >
+                {s.label}
+              </button>
+            ))
+          }
+        </nav>
+
+        <iframe
+          data-settings-frame
+          title="Settings"
+          class="min-h-0 flex-1 border-0 bg-canvas"
+          src="about:blank"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const dialog = document.querySelector<HTMLElement>('[data-settings-dialog]');
+  if (dialog) {
+    const frame = dialog.querySelector<HTMLIFrameElement>('[data-settings-frame]')!;
+    const closeBtn = dialog.querySelector<HTMLButtonElement>('[data-settings-close]')!;
+    const backdrop = dialog.querySelector<HTMLElement>('[data-settings-backdrop]')!;
+    const sections = Array.from(
+      dialog.querySelectorAll<HTMLButtonElement>('[data-settings-section]'),
+    );
+    const ACTIVE = ['border-accent', 'bg-sunken', 'font-bold', 'text-fg-1'];
+    let lastFocus: HTMLElement | null = null;
+
+    function activate(btn: HTMLButtonElement) {
+      sections.forEach((s) => {
+        const on = s === btn;
+        s.classList.toggle('border-transparent', !on);
+        s.classList.toggle('text-fg-2', !on);
+        ACTIVE.forEach((c) => s.classList.toggle(c, on));
+      });
+      frame.src = btn.dataset.href!;
+    }
+
+    function open() {
+      lastFocus = document.activeElement as HTMLElement;
+      dialog!.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      if (frame.getAttribute('src') === 'about:blank' && sections[0]) activate(sections[0]);
+      closeBtn.focus();
+    }
+
+    function close() {
+      dialog!.classList.add('hidden');
+      document.body.style.overflow = '';
+      lastFocus?.focus?.();
+    }
+
+    document
+      .querySelectorAll<HTMLElement>('[data-settings-trigger]')
+      .forEach((t) => t.addEventListener('click', (e) => (e.preventDefault(), open())));
+    closeBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    sections.forEach((s) => s.addEventListener('click', () => activate(s)));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !dialog.classList.contains('hidden')) close();
+    });
+    // Focus trap: if focus leaves the dialog while open, pull it back. Tabbing
+    // into the iframe keeps e.target === the iframe (inside dialog), so internal
+    // iframe navigation is unaffected; only escaping past it is redirected.
+    document.addEventListener('focusin', (e) => {
+      if (dialog.classList.contains('hidden')) return;
+      if (!dialog.contains(e.target as Node)) closeBtn.focus();
+    });
+  }
+</script>

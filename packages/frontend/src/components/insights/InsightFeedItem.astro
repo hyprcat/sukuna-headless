@@ -1,0 +1,80 @@
+---
+import InsightCard from '../ui/InsightCard.astro';
+import InsightFeedMeta from './InsightFeedMeta.astro';
+import Icon from '../ui/Icon.astro';
+import zap from 'lucide-static/icons/zap.svg?raw';
+import trendingUp from 'lucide-static/icons/trending-up.svg?raw';
+import alertTriangle from 'lucide-static/icons/alert-triangle.svg?raw';
+import clock from 'lucide-static/icons/clock.svg?raw';
+import { CATEGORY_ACTIONS } from '../../lib/insight-categories';
+
+const CATEGORY_ICON: Record<string, string> = {
+  capability_gap: zap,
+  tier_optimization: trendingUp,
+  quality_issue: alertTriangle,
+  scheduled_task_health: clock,
+};
+
+interface Props {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+  status: string;
+  createdAt: string;
+  affectedAgentIds?: number[];
+  affectedRunIds?: string[];
+  affectedEndUserIds?: number[];
+  canDismiss: boolean;
+  canPin: boolean;
+}
+
+const {
+  id,
+  category,
+  title,
+  body,
+  status,
+  createdAt,
+  affectedAgentIds = [],
+  affectedRunIds = [],
+  affectedEndUserIds = [],
+  canDismiss,
+  canPin,
+} = Astro.props;
+
+const action = CATEGORY_ACTIONS[category];
+---
+
+<div class="insight-feed-item" data-category={category} data-id={id} data-status={status}>
+  <InsightCard actionHref={action?.href} actionLabel={action?.label}>
+    <Icon slot="icon" svg={CATEGORY_ICON[category] ?? zap} size={16} class="text-fg-1" />
+    <span>
+      <strong class="text-fg-1">{title}</strong>
+      {body}
+    </span>
+  </InsightCard>
+  <InsightFeedMeta
+    id={id}
+    category={category}
+    status={status}
+    createdAt={createdAt}
+    affectedAgentIds={affectedAgentIds}
+    affectedRunIds={affectedRunIds}
+    affectedEndUserIds={affectedEndUserIds}
+    canDismiss={canDismiss}
+    canPin={canPin}
+  />
+</div>
+
+<style>
+  .insight-feed-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .insight-feed-item[hidden] {
+    display: none;
+  }
+</style>

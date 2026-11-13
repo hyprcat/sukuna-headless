@@ -1,0 +1,170 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Sidebar from '../components/global/Sidebar.astro';
+import Topbar from '../components/global/Topbar.astro';
+import TabNav from '../components/global/TabNav.astro';
+import MobileTabBar from '../components/global/MobileTabBar.astro';
+import SettingsDialog from '../components/global/SettingsDialog.astro';
+import { gql } from '../lib/graphql';
+
+interface Props {
+  title: string;
+  current?: string;
+  settingsSub?: string;
+  agentName?: string;
+  agents?: Array<{ id: string; name: string }>;
+  credits?: string;
+  userCount?: string;
+  description?: string;
+}
+
+const {
+  title,
+  current = 'overview',
+  settingsSub,
+  agentName,
+  agents,
+  credits,
+  userCount,
+  description,
+} = Astro.props;
+
+const userName = Astro.locals.user?.full_name || Astro.locals.user?.email;
+const userEmail = Astro.locals.user?.email;
+
+// Bare mode: chrome-less render for embedding a page inside the settings dialog iframe.
+const bare = Astro.url.searchParams.has('bare');
+const workspaces = Astro.locals.workspaces ?? [];
+const workspaceSlug = Astro.locals.workspaceSlug ?? null;
+const layout = Astro.locals.layout ?? 'classic';
+
+interface ShellData {
+  agents: { edges: { node: { id: string; name: string } }[] };
+  wallet: { available: string } | null;
+  endUsers: { totalCount: number };
+}
+
+let shellAgents = agents ?? [];
+let shellCredits = credits;
+let shellUserCount = userCount;
+
+function formatCreditBalance(value: string | number | null | undefined): string {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+if (!bare && (!shellAgents.length || !shellCredits || !shellUserCount)) {
+  const cookie = Astro.request.headers.get('cookie') ?? '';
+  const { data } = await gql<ShellData>(
+    `query ShellChrome {
+      agents(first: 50) { edges { node { id name } } }
+      wallet { available }
+      endUsers(isActive: true, first: 1) { totalCount }
+    }`,
+    {},
+    cookie,
+    workspaceSlug ?? undefined,
+  );
+
+  shellAgents = shellAgents.length ? shellAgents : (data?.agents?.edges?.map((e) => e.node) ?? []);
+  shellCredits = shellCredits ?? formatCreditBalance(data?.wallet?.available);
+  shellUserCount = shellUserCount ?? (data?.endUsers?.totalCount ?? 0).toLocaleString();
+}
+
+const selectedAgentName = agentName ?? shellAgents[0]?.name;
+---
+
+<BaseLayout title={title} description={description}>
+  {
+    bare ? (
+      <main id="main" tabindex="-1" class="mx-auto w-full max-w-3xl px-6 py-8">
+        <slot />
+      </main>
+    ) : (
+      <div class="min-h-screen bg-canvas lg:flex" data-layout={layout}>
+        <Sidebar
+          current={current}
+          settingsSub={settingsSub}
+          agentName={selectedAgentName}
+          agents={shellAgents}
+          credits={shellCredits}
+          userCount={shellUserCount}
+          userName={userName}
+          userEmail={userEmail}
+          workspaces={workspaces}
+          currentWorkspaceSlug={workspaceSlug}
+          layout={layout}
+        />
+
+        <div class="min-w-0 flex-1">
+          <div class="lg:hidden">
+            <Topbar
+              agentName={selectedAgentName}
+              agents={shellAgents}
+              credits={shellCredits}
+              userCount={shellUserCount}
+              userName={userName}
+              workspaces={workspaces}
+              currentWorkspaceSlug={workspaceSlug}
+              layout={layout}
+            />
+            <TabNav current={current} settingsSub={settingsSub} layout={layout} />
+          </div>
+
+          <main id="main" tabindex="-1" class="w-full px-5 py-8 pb-24 md:px-6 lg:px-8 lg:pb-8">
+            <slot />
+          </main>
+        </div>
+
+        <MobileTabBar current={current} />
+        <SettingsDialog />
+      </div>
+    )
+  }
+
+  <script is:inline src="/scripts/lib/toast.js"></script>
+  <script is:inline src="/scripts/lib/confirm.js"></script>
+
+  <script
+    is:inline
+    id="ms-auth-context"
+    type="application/json"
+    set:html={JSON.stringify({
+      id: String(Astro.locals.user?.id ?? ''),
+      email: Astro.locals.user?.email ?? '',
+      name: Astro.locals.user?.full_name ?? '',
+      workspace: workspaceSlug ?? '',
+    })}
+  />
+  <script>
+    import { identifyUser } from '../lib/observability/posthog';
+    import { setSentryUser } from '../lib/observability/sentry';
+
+    const el = document.getElementById('ms-auth-context');
+    if (el?.textContent) {
+      try {
+        const ctx = JSON.parse(el.textContent) as {
+          id: string;
+          email: string;
+          name: string;
+          workspace: string;
+        };
+        if (ctx.id) {
+          identifyUser(ctx.id, {
+            email: ctx.email || undefined,
+            name: ctx.name || undefined,
+            workspace_slug: ctx.workspace || undefined,
+          });
+          setSentryUser(ctx.id, ctx.email || undefined);
+        }
+      } catch {
+        /* non-blocking */
+      }
+    }
+  </script>
+</BaseLayout>

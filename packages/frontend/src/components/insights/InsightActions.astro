@@ -1,0 +1,94 @@
+---
+import Icon from '../ui/Icon.astro';
+import xIcon from 'lucide-static/icons/x.svg?raw';
+import pinIcon from 'lucide-static/icons/pin.svg?raw';
+import pinOffIcon from 'lucide-static/icons/pin-off.svg?raw';
+
+interface Props {
+  id: string;
+  status: string;
+  canDismiss: boolean;
+  canPin: boolean;
+}
+
+const { id, status, canDismiss, canPin } = Astro.props;
+const isActive = status === 'active';
+const isPinned = status === 'pinned';
+const canShowDismiss = canDismiss && status !== 'dismissed';
+---
+
+{
+  (canPin || canShowDismiss) && (
+    <span class="insight-actions">
+      {canPin && isActive && (
+        <button
+          type="button"
+          class="insight-action-btn"
+          data-action="pin"
+          data-insight-id={id}
+          aria-label="Pin insight"
+        >
+          <Icon svg={pinIcon} size={14} />
+        </button>
+      )}
+      {canPin && isPinned && (
+        <button
+          type="button"
+          class="insight-action-btn"
+          data-action="unpin"
+          data-insight-id={id}
+          aria-label="Unpin insight"
+        >
+          <Icon svg={pinOffIcon} size={14} />
+        </button>
+      )}
+      {canShowDismiss && (
+        <button
+          type="button"
+          class="insight-action-btn"
+          data-action="dismiss"
+          data-insight-id={id}
+          aria-label="Dismiss insight"
+        >
+          <Icon svg={xIcon} size={14} />
+        </button>
+      )}
+    </span>
+  )
+}
+
+<style>
+  .insight-actions {
+    margin-left: auto;
+    display: flex;
+    gap: var(--ms-space-1);
+    opacity: 0;
+    transition: opacity var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  :global(.insight-feed-item:hover) .insight-actions,
+  :global(.insight-feed-item:focus-within) .insight-actions {
+    opacity: 1;
+  }
+
+  .insight-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--ms-r-sm);
+    border: none;
+    background: transparent;
+    color: var(--ms-fg-3);
+    cursor: pointer;
+    transition:
+      background-color var(--ms-t-color) var(--ms-ease-out),
+      color var(--ms-t-color) var(--ms-ease-out);
+  }
+
+  .insight-action-btn:hover {
+    background: var(--ms-bg-sunken);
+    color: var(--ms-fg-1);
+  }
+</style>

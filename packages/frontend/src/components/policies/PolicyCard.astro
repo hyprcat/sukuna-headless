@@ -1,0 +1,125 @@
+---
+import StatusBadge from '../ui/StatusBadge.astro';
+
+interface Props {
+  id: string;
+  name: string;
+  actionRestrictions: string[];
+  domainRestrictions: string[];
+  outputRestrictions: string[];
+  agents: string[];
+}
+
+const { id, name, actionRestrictions, domainRestrictions, outputRestrictions, agents } =
+  Astro.props;
+
+const totalRules =
+  actionRestrictions.length + domainRestrictions.length + outputRestrictions.length;
+
+const firstRule = actionRestrictions[0] ?? domainRestrictions[0] ?? outputRestrictions[0] ?? '';
+
+const scopeLabel = agents.length > 0 ? agents.join(', ') : 'All agents';
+---
+
+<button
+  type="button"
+  class="policy-card"
+  aria-pressed="false"
+  data-policy-id={id}
+  data-policy-name={name}
+  data-policy-actions={JSON.stringify(actionRestrictions)}
+  data-policy-domains={JSON.stringify(domainRestrictions)}
+  data-policy-outputs={JSON.stringify(outputRestrictions)}
+  data-policy-agents={JSON.stringify(agents)}
+>
+  <div class="card-inner">
+    <div class="card-header">
+      <p class="policy-name">{name}</p>
+      <StatusBadge status="active" />
+    </div>
+    <p class="policy-desc">{firstRule || 'No rules defined'}</p>
+    <div class="policy-footer">
+      <span class="scope-badge">{scopeLabel}</span>
+      <span class="scope-badge rule-count">{totalRules} rule{totalRules !== 1 ? 's' : ''}</span>
+    </div>
+  </div>
+</button>
+
+<style>
+  .policy-card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: var(--ms-space-4);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-canvas);
+    cursor: pointer;
+    transition:
+      border-color var(--ms-t-color) var(--ms-ease-out),
+      box-shadow var(--ms-t-color) var(--ms-ease-out);
+    border-left: 3px solid transparent;
+  }
+
+  .policy-card:hover {
+    border-color: var(--ms-border-default);
+  }
+
+  :global(.policy-card[aria-pressed='true']) {
+    border-left-color: var(--ms-accent);
+    border-color: var(--ms-border-default);
+    box-shadow: var(--ms-shadow-1);
+  }
+
+  .card-inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ms-space-2);
+  }
+
+  .policy-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .policy-desc {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .policy-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ms-space-2);
+    align-items: center;
+  }
+
+  .scope-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-bg-sunken);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+    white-space: nowrap;
+  }
+
+  .rule-count {
+    background: transparent;
+    color: var(--ms-fg-3);
+    padding: 0;
+  }
+</style>

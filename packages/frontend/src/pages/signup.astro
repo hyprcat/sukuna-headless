@@ -1,0 +1,164 @@
+---
+import AuthLayout from '../layouts/AuthLayout.astro';
+import Button from '../components/ui/Button.astro';
+import Input from '../components/ui/Input.astro';
+import PaperStackDoodle from '../components/doodles/PaperStackDoodle.astro';
+import { apiPost } from '../lib/api';
+
+type SignupState = {
+  status: 'form' | 'sent';
+  email: string;
+  fullName: string;
+  error: string;
+  notice: string;
+};
+
+const state = await (async (): Promise<SignupState> => {
+  const initial = { status: 'form' as const, email: '', fullName: '', error: '', notice: '' };
+  if (Astro.request.method !== 'POST') return initial;
+
+  const form = await Astro.request.formData();
+  const email = form.get('email')?.toString() ?? '';
+  const password = form.get('password')?.toString() ?? '';
+  const full_name = form.get('full_name')?.toString() ?? '';
+  const intent = form.get('intent')?.toString() ?? 'signup';
+
+  if (intent === 'resend-verification') {
+    const result = await apiPost(
+      '/auth/resend-verification/',
+      { email },
+      Astro.request.headers.get('cookie') ?? undefined,
+    );
+
+    return {
+      status: 'sent',
+      email,
+      fullName: '',
+      error: result.ok ? '' : (result.error ?? 'Something went wrong.'),
+      notice: result.ok
+        ? 'If that email is still unverified, we sent a new verification link.'
+        : '',
+    };
+  }
+
+  const result = await apiPost(
+    '/auth/signup/',
+    { email, password, full_name },
+    Astro.request.headers.get('cookie') ?? undefined,
+  );
+
+  if (result.ok) return { status: 'sent', email, fullName: full_name, error: '', notice: '' };
+  return {
+    status: 'form',
+    email,
+    fullName: full_name,
+    error: result.error ?? 'Something went wrong.',
+    notice: '',
+  };
+})();
+---
+
+<AuthLayout title="Create account · midsphere" description="Create your midsphere account">
+  <div class="relative">
+    <PaperStackDoodle
+      size={120}
+      class="doodle-float pointer-events-none absolute -right-4 -top-20 rotate-6"
+    />
+
+    <section
+      class="relative rounded-lg border border-border-subtle bg-canvas p-8 shadow-1"
+      aria-labelledby="signup-heading"
+    >
+      {
+        state.status === 'sent' ? (
+          <div>
+            <h1 id="signup-heading" class="text-2xl font-medium tracking-tight">
+              Check your email
+            </h1>
+            <p class="mt-3 text-sm text-fg-2 leading-relaxed">
+              We sent a verification link to{' '}
+              <strong class="font-medium text-fg-1">{state.email}</strong>. Verify your email, then
+              sign in to open your workspace.
+            </p>
+
+            {state.notice && (
+              <div class="mt-4 rounded-sm bg-ok/10 px-4 py-3 text-sm text-ok" role="status">
+                {state.notice}
+              </div>
+            )}
+
+            {state.error && (
+              <div class="mt-4 rounded-sm bg-err/10 px-4 py-3 text-sm text-err" role="alert">
+                {state.error}
+              </div>
+            )}
+
+            <form method="POST" class="mt-7">
+              <input type="hidden" name="intent" value="resend-verification" />
+              <input type="hidden" name="email" value={state.email} />
+              <Button type="submit" variant="secondary" full>
+                Send verification link again
+              </Button>
+            </form>
+          </div>
+        ) : (
+          <div>
+            <h1 id="signup-heading" class="text-2xl font-medium tracking-tight">
+              Create account
+            </h1>
+            <p class="mt-2 text-sm text-fg-2">
+              Set up your account, then build your first <span class="hl">agent</span>.
+            </p>
+
+            {state.error && (
+              <div class="mt-4 rounded-sm bg-err/10 px-4 py-3 text-sm text-err" role="alert">
+                {state.error}
+              </div>
+            )}
+
+            <form method="POST" class="mt-7 flex flex-col gap-5">
+              <Input
+                id="full_name"
+                name="full_name"
+                label="Full name"
+                type="text"
+                placeholder="Ada Lovelace"
+                autocomplete="name"
+                value={state.fullName}
+              />
+              <Input
+                id="email"
+                name="email"
+                label="Email"
+                type="email"
+                placeholder="you@company.com"
+                autocomplete="email"
+                required
+                value={state.email}
+              />
+              <Input
+                id="password"
+                name="password"
+                label="Password"
+                type="password"
+                placeholder="••••••••"
+                autocomplete="new-password"
+                required
+                hint="At least 8 characters. Not too common, not too similar to your email."
+              />
+
+              <Button type="submit" variant="primary" full>
+                Create account
+              </Button>
+            </form>
+          </div>
+        )
+      }
+    </section>
+  </div>
+
+  <p class="mt-6 text-center text-sm text-fg-2">
+    Already have an account?
+    <a href="/login" class="text-fg-1 underline underline-offset-4">Sign in</a>
+  </p>
+</AuthLayout>

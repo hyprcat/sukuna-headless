@@ -1,0 +1,146 @@
+---
+import AuthLayout from '../layouts/AuthLayout.astro';
+import Button from '../components/ui/Button.astro';
+import Input from '../components/ui/Input.astro';
+import KeyDoodle from '../components/doodles/KeyDoodle.astro';
+import { apiPost } from '../lib/api';
+import { safeReturnTo } from '../lib/url';
+
+const returnTo = safeReturnTo(Astro.url.searchParams.get('return_to') ?? '');
+
+// let required: Astro frontmatter needs top-level `return` for redirects, preventing const extraction.
+let error = '';
+let notice = '';
+let email = '';
+let needsVerification = false;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const intent = form.get('intent')?.toString() ?? 'login';
+  email = form.get('email')?.toString() ?? '';
+  const postReturnTo = safeReturnTo(form.get('return_to')?.toString() ?? '');
+
+  if (intent === 'resend-verification') {
+    const result = await apiPost(
+      '/auth/resend-verification/',
+      { email },
+      Astro.request.headers.get('cookie') ?? undefined,
+    );
+
+    needsVerification = true;
+    if (result.ok) {
+      notice = 'If that email is still unverified, we sent a new verification link.';
+    } else {
+      error = result.error ?? 'Something went wrong.';
+    }
+  } else {
+    const password = form.get('password')?.toString() ?? '';
+
+    const result = await apiPost(
+      '/auth/login/',
+      { email, password },
+      Astro.request.headers.get('cookie') ?? undefined,
+    );
+
+    if (result.ok && result.setCookie) {
+      const res = Astro.redirect(postReturnTo);
+      for (const c of result.setCookie) {
+        res.headers.append('Set-Cookie', c);
+      }
+      return res;
+    }
+
+    needsVerification =
+      'email_verification_required' in result.data &&
+      result.data.email_verification_required === true;
+    error = result.error ?? 'Something went wrong.';
+  }
+}
+---
+
+<AuthLayout title="Sign in · midsphere" description="Sign in to your midsphere dashboard">
+  <div class="relative">
+    <KeyDoodle
+      size={140}
+      class="doodle-float pointer-events-none absolute -right-6 -top-24 -rotate-12"
+    />
+
+    <section
+      class="relative rounded-lg border border-border-subtle bg-canvas p-8 shadow-1"
+      aria-labelledby="signin-heading"
+    >
+      <h1 id="signin-heading" class="text-2xl font-medium tracking-tight">Sign in</h1>
+      <p class="mt-2 text-sm text-fg-2">
+        Use your work email to access your <span class="hl">agents</span>.
+      </p>
+
+      {
+        error && (
+          <div class="mt-4 rounded-sm bg-err/10 px-4 py-3 text-sm text-err" role="alert">
+            {error}
+          </div>
+        )
+      }
+
+      <form method="POST" class="mt-7 flex flex-col gap-5">
+        <input type="hidden" name="return_to" value={returnTo} />
+        <Input
+          id="email"
+          name="email"
+          label="Email"
+          type="email"
+          placeholder="you@company.com"
+          autocomplete="email"
+          required
+          value={email}
+        />
+        <Input
+          id="password"
+          name="password"
+          label="Password"
+          type="password"
+          placeholder="••••••••"
+          autocomplete="current-password"
+          required
+        />
+
+        <div class="flex items-center justify-end text-sm">
+          <a href="/forgot-password" class="text-fg-2 underline underline-offset-4">
+            Forgot password?
+          </a>
+        </div>
+
+        <Button type="submit" variant="primary" full>Sign in</Button>
+      </form>
+
+      {
+        notice && (
+          <div class="mt-4 rounded-sm bg-ok/10 px-4 py-3 text-sm text-ok" role="status">
+            {notice}
+          </div>
+        )
+      }
+
+      {
+        needsVerification && email && (
+          <div class="mt-5 rounded-sm bg-sunken p-4 text-sm text-fg-2">
+            <p>Need another verification link?</p>
+            <form method="POST" class="mt-3">
+              <input type="hidden" name="intent" value="resend-verification" />
+              <input type="hidden" name="email" value={email} />
+              <input type="hidden" name="return_to" value={returnTo} />
+              <Button type="submit" variant="secondary" full>
+                Send verification link
+              </Button>
+            </form>
+          </div>
+        )
+      }
+    </section>
+  </div>
+
+  <p class="mt-6 text-center text-sm text-fg-2">
+    Don't have an account?
+    <a href="/signup" class="text-fg-1 underline underline-offset-4">Create one</a>
+  </p>
+</AuthLayout>

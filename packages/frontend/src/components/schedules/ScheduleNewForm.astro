@@ -1,0 +1,173 @@
+---
+import Button from '../ui/Button.astro';
+
+interface AgentOption {
+  id: string;
+  name: string;
+}
+
+interface EndUserOption {
+  id: string;
+  externalUserId: string;
+}
+
+interface Props {
+  agents: AgentOption[];
+  endUsers: EndUserOption[];
+}
+
+const { agents, endUsers } = Astro.props;
+const hasAgents = agents.length > 0;
+const hasEndUsers = endUsers.length > 0;
+const canCreate = hasAgents && hasEndUsers;
+---
+
+<dialog
+  id="dlg-schedule"
+  class="m-auto w-full max-w-lg rounded-xl bg-canvas p-0 shadow-lg backdrop:bg-black/40"
+>
+  <div class="p-6">
+    <h2 class="text-lg font-medium tracking-tight text-fg-1">New schedule</h2>
+    <p class="mt-1 text-sm text-fg-2">Run an agent on a recurring basis.</p>
+
+    {
+      !canCreate && (
+        <div class="schedule-blockers" role="status">
+          {!hasAgents && (
+            <p>
+              Create an <a href="/agents/new">agent</a> before adding a schedule.
+            </p>
+          )}
+          {!hasEndUsers && (
+            <p>
+              Add an <a href="/end-users">end user</a> before adding a schedule.
+            </p>
+          )}
+        </div>
+      )
+    }
+
+    <form id="schedule-form" class="mt-6 flex flex-col gap-5">
+      <label class="field-label">
+        Name
+        <input
+          type="text"
+          name="name"
+          required
+          class="input"
+          placeholder="e.g. Weekly user digest"
+        />
+      </label>
+
+      <label class="field-label">
+        Description
+        <input type="text" name="description" class="input" placeholder="What this schedule does" />
+      </label>
+
+      <label class="field-label">
+        Agent
+        <select name="agentId" required class="input" disabled={!hasAgents}>
+          <option value="">Select an agent</option>
+          {agents.map((a) => <option value={a.id}>{a.name}</option>)}
+        </select>
+      </label>
+
+      <label class="field-label">
+        Target end user
+        <select name="endUserId" required class="input" disabled={!hasEndUsers}>
+          <option value="">Select an end user</option>
+          {endUsers.map((u) => <option value={u.id}>{u.externalUserId}</option>)}
+        </select>
+      </label>
+
+      <label class="field-label">
+        Prompt
+        <textarea
+          name="prompt"
+          required
+          class="input field-textarea"
+          rows="3"
+          placeholder="The prompt the agent receives each run"></textarea>
+      </label>
+
+      <label class="field-label">
+        Cron expression
+        <input
+          type="text"
+          name="cronExpression"
+          required
+          class="input font-mono"
+          placeholder="0 9 * * 1"
+        />
+        <span class="field-hint"
+          >Standard 5-field cron: minute hour day-of-month month day-of-week</span
+        >
+      </label>
+
+      <label class="field-label">
+        Failure handling
+        <select name="failureHandling" class="input">
+          <option value="skip">Skip</option>
+          <option value="retry">Retry</option>
+          <option value="alert">Alert</option>
+          <option value="log_silent">Log silently</option>
+        </select>
+      </label>
+
+      <div
+        id="schedule-form-error"
+        class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+        role="alert"
+      >
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <Button variant="ghost" id="btn-cancel-schedule">Cancel</Button>
+        <Button variant="accent" type="submit" id="btn-submit-schedule" disabled={!canCreate}
+          >Create schedule</Button
+        >
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<style>
+  .field-label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-1);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+  }
+
+  .field-textarea {
+    resize: vertical;
+    min-height: 64px;
+  }
+
+  .field-hint {
+    font-size: 0.6875rem;
+    color: var(--ms-fg-2);
+    font-weight: 400;
+  }
+
+  .schedule-blockers {
+    display: grid;
+    gap: var(--ms-space-1);
+    margin-top: var(--ms-space-4);
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-md);
+    padding: var(--ms-space-3);
+    color: var(--ms-fg-2);
+    font-size: 0.875rem;
+  }
+
+  .schedule-blockers a {
+    color: var(--ms-fg-1);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+</style>

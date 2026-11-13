@@ -1,0 +1,136 @@
+---
+import { initial } from '../../lib/format';
+import type { Workspace } from '../../lib/types';
+
+interface Props {
+  userName?: string;
+  workspaces?: Workspace[];
+  currentWorkspaceSlug?: string | null;
+  layout?: 'classic' | 'new';
+  // 'bottom-right' (default) opens down-and-left of the trigger; 'top-left' opens
+  // up-and-right — use it when the trigger sits at the bottom of a sidebar.
+  placement?: 'bottom-right' | 'top-left';
+}
+
+const {
+  userName,
+  workspaces = [],
+  currentWorkspaceSlug = null,
+  layout = 'classic',
+  placement = 'bottom-right',
+} = Astro.props;
+
+const menuPosition = placement === 'top-left' ? 'bottom-full left-0 mb-1' : 'top-full right-0 mt-1';
+
+const currentWorkspace = workspaces.find((w) => w.slug === currentWorkspaceSlug);
+const returnTo = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<div class="relative" data-account-selector>
+  <button
+    type="button"
+    aria-haspopup="menu"
+    aria-expanded="false"
+    class="grid h-10 w-10 place-items-center rounded-full bg-fg-1 text-sm font-medium text-fg-on-inverse-1 motion-safe:transition-opacity motion-safe:duration-150 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-white focus-visible:shadow-[0_0_0_4px_var(--ms-accent)]"
+    data-account-trigger
+    aria-label={`Account: ${userName ?? 'User'}`}
+  >
+    {initial(userName)}
+  </button>
+
+  <div
+    class:list={[
+      'absolute z-50 hidden min-w-[220px] rounded-lg border border-border-default bg-canvas py-1 shadow-2',
+      menuPosition,
+    ]}
+    data-account-menu
+    role="menu"
+    aria-label="Account menu"
+  >
+    {currentWorkspace && <div class="px-3 py-2 text-xs text-fg-2">{currentWorkspace.name}</div>}
+
+    {
+      workspaces.length > 1 && (
+        <>
+          <div class="my-1 border-t border-border-subtle" role="separator" />
+          {workspaces.map((ws) => {
+            const active = ws.slug === currentWorkspaceSlug;
+            return (
+              <form method="POST" action="/api/set-workspace" role="none">
+                <input type="hidden" name="slug" value={ws.slug} />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <button
+                  type="submit"
+                  role="menuitemradio"
+                  aria-checked={active ? 'true' : 'false'}
+                  tabindex="-1"
+                  data-account-item
+                  class={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken ${active ? 'font-medium text-fg-1' : 'text-fg-2'}`}
+                >
+                  <span class="grid h-5 w-5 shrink-0 place-items-center rounded bg-sunken text-[9px] font-semibold text-fg-1">
+                    {initial(ws.name)}
+                  </span>
+                  <span class="truncate">{ws.name}</span>
+                </button>
+              </form>
+            );
+          })}
+        </>
+      )
+    }
+
+    <div class="my-1 border-t border-border-subtle" role="separator"></div>
+
+    <form method="POST" action="/api/set-layout" role="none">
+      <input type="hidden" name="layout" value={layout === 'new' ? 'classic' : 'new'} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <button
+        type="submit"
+        role="menuitem"
+        tabindex="-1"
+        data-account-item
+        class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg-2 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken hover:text-fg-1"
+      >
+        {layout === 'new' ? 'Switch to classic layout' : 'Try the new layout'}
+      </button>
+    </form>
+
+    <div class="my-1 border-t border-border-subtle" role="separator"></div>
+
+    <form method="POST" action="/logout" role="none">
+      <button
+        type="submit"
+        role="menuitem"
+        tabindex="-1"
+        data-account-item
+        class="flex w-full items-center px-3 py-2 text-left text-sm text-fg-2 motion-safe:transition-colors motion-safe:duration-150 hover:bg-sunken hover:text-fg-1"
+      >
+        Sign out
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  import { initDropdown } from '../../lib/dropdown';
+  import { resetPostHog } from '../../lib/observability/posthog';
+  import { clearSentryUser } from '../../lib/observability/sentry';
+
+  document.querySelectorAll('[data-account-selector]').forEach((el) => {
+    initDropdown(el, {
+      trigger: '[data-account-trigger]',
+      menu: '[data-account-menu]',
+      items: '[data-account-item]',
+    });
+
+    const logoutForm = el.querySelector<HTMLFormElement>('form[action="/logout"]');
+    logoutForm?.addEventListener('submit', () => {
+      try {
+        resetPostHog();
+        clearSentryUser();
+      } catch {
+        /* non-blocking */
+      }
+    });
+  });
+</script>

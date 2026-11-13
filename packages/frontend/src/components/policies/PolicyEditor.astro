@@ -1,0 +1,162 @@
+---
+import Button from '../ui/Button.astro';
+import CodeBlock from '../ui/CodeBlock.astro';
+
+interface Agent {
+  id: string;
+  name: string;
+  policyOverrideId: string | null;
+}
+
+interface Props {
+  agents: Agent[];
+  canWrite?: boolean;
+}
+
+const { agents, canWrite = true } = Astro.props;
+---
+
+<form id="policy-editor-form" autocomplete="off">
+  <input type="hidden" id="editor-policy-id" name="policyId" value="" />
+
+  <div class="editor-field">
+    <label for="editor-name" class="editor-label">Name</label>
+    <input
+      type="text"
+      id="editor-name"
+      name="name"
+      class="input"
+      placeholder="PII redaction in outputs"
+      required
+      aria-required="true"
+      aria-describedby="editor-feedback"
+      readonly={!canWrite}
+    />
+  </div>
+
+  <div class="editor-field">
+    <label for="editor-rules" class="editor-label">Rule definition</label>
+    <CodeBlock
+      editable
+      name="rules"
+      textareaId="editor-rules"
+      lang="json"
+      label="JSON"
+      rows={14}
+      describedBy="editor-feedback"
+      placeholder='{"action_restrictions": [], "domain_restrictions": [], "output_restrictions": []}'
+      readonly={!canWrite}
+    />
+  </div>
+
+  <div class="editor-field">
+    <p id="scope-label" class="editor-label">Scope / applies to</p>
+    <div class="agent-list" role="group" aria-labelledby="scope-label">
+      {
+        agents.map((a) => (
+          <span
+            class="agent-scope-badge"
+            data-agent-id={a.id}
+            data-agent-name={a.name}
+            data-override-id={a.policyOverrideId ?? ''}
+          >
+            {a.name}
+          </span>
+        ))
+      }
+      {agents.length === 0 && <p class="text-xs text-fg-3">No agents in workspace.</p>}
+    </div>
+    <p class="scope-note">
+      Workspace-level policies apply to all agents. Use agent settings to assign a specific policy
+      override.
+    </p>
+  </div>
+
+  {
+    canWrite && (
+      <div class="editor-actions">
+        <div id="editor-feedback" class="editor-feedback" role="status" aria-live="polite" hidden />
+        <Button variant="accent" type="submit" id="save-policy-btn">
+          Save changes
+        </Button>
+      </div>
+    )
+  }
+</form>
+
+<p class="enforcement-note">
+  Policies are enforced at the context level — your agent can't violate them, even if asked.
+</p>
+
+<style>
+  .editor-field {
+    margin-bottom: var(--ms-space-4);
+  }
+
+  .editor-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    margin-bottom: var(--ms-space-2);
+  }
+
+  .agent-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ms-space-2);
+  }
+
+  .agent-scope-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: var(--ms-r-pill);
+    background: var(--ms-bg-sunken);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ms-fg-2);
+  }
+
+  :global(.agent-scope-badge.assigned) {
+    background: var(--ms-accent-soft);
+    color: var(--ms-accent-ink);
+  }
+
+  .scope-note {
+    margin-top: var(--ms-space-2);
+    font-size: 0.75rem;
+    color: var(--ms-fg-2);
+  }
+
+  .editor-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+    padding-top: var(--ms-space-3);
+    border-top: 1px solid var(--ms-border-subtle);
+  }
+
+  .editor-feedback {
+    font-size: 0.8125rem;
+    padding: var(--ms-space-2) var(--ms-space-3);
+    border-radius: var(--ms-r-xs);
+  }
+
+  :global(.editor-feedback.success) {
+    background: color-mix(in oklch, var(--ms-ok) 12%, transparent);
+    color: var(--ms-ok);
+  }
+
+  :global(.editor-feedback.error) {
+    background: color-mix(in oklch, var(--ms-err) 12%, transparent);
+    color: var(--ms-err);
+  }
+
+  .enforcement-note {
+    margin-top: var(--ms-space-5);
+    font-size: 0.75rem;
+    color: var(--ms-fg-2);
+    font-style: italic;
+  }
+</style>

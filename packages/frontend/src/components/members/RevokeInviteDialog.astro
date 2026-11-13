@@ -1,0 +1,38 @@
+---
+import Button from '../ui/Button.astro';
+---
+
+<dialog
+  id="dlg-revoke-invite"
+  aria-labelledby="dlg-revoke-invite-title"
+  class="m-auto w-full max-w-sm rounded-xl bg-canvas p-0 shadow-lg backdrop:bg-black/40"
+>
+  <div class="p-6">
+    <h2 id="dlg-revoke-invite-title" class="text-lg font-medium tracking-tight text-fg-1">
+      Cancel invitation
+    </h2>
+    <p class="mt-2 text-sm text-fg-2">
+      Cancel the pending invitation for
+      <strong id="revoke-invite-email" class="text-fg-1"></strong>? They will no longer be able to
+      join.
+    </p>
+
+    <form id="form-revoke-invite" class="mt-5 flex flex-col gap-4">
+      <input type="hidden" name="invitationId" id="revoke-invite-id" />
+
+      <div
+        id="revoke-invite-error"
+        class="hidden rounded-md border border-err/20 bg-err/5 px-3 py-2 text-sm text-err"
+        role="alert"
+      >
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-1">
+        <Button variant="ghost" id="btn-cancel-revoke-invite">Keep invitation</Button>
+        <Button variant="primary" type="submit" class="!bg-err !text-white hover:!bg-err/90">
+          Cancel invitation
+        </Button>
+      </div>
+    </form>
+  </div>
+</dialog>

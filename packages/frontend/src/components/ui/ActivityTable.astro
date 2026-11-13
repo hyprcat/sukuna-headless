@@ -1,0 +1,94 @@
+---
+import DataTable from './DataTable.astro';
+import StarRating from './StarRating.astro';
+import AgentBadge from './AgentBadge.astro';
+import { formatDuration, initial, timeAgo } from '../../lib/format';
+
+interface Run {
+  runUid: string;
+  status: string;
+  promptPreview: string;
+  agentName?: string;
+  endUserIdExternal: string;
+  totalCost: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt?: string;
+  rating: { score: number } | null;
+}
+
+interface Props {
+  runs: Run[];
+  showAgent?: boolean;
+  showUser?: boolean;
+  emptyMessage?: string;
+}
+
+const {
+  runs,
+  showAgent = false,
+  showUser = true,
+  emptyMessage = "No runs yet. They'll appear here once your agents start working.",
+} = Astro.props;
+const showTime = runs.some((run) => run.createdAt);
+---
+
+{
+  runs.length > 0 ? (
+    <DataTable label="Recent activity">
+      <tr slot="head">
+        {showUser && <th>User</th>}
+        <th>Description</th>
+        {showAgent && <th class="hidden md:table-cell">Agent</th>}
+        <th class="hidden sm:table-cell">Duration</th>
+        <th>Cost</th>
+        <th class="hidden sm:table-cell">Rating</th>
+        {showTime && <th class="hidden lg:table-cell">Time</th>}
+      </tr>
+      {runs.map((run) => (
+        <tr>
+          {showUser && (
+            <td data-label="User">
+              <a href={`/runs/${run.runUid}`} class="flex items-center gap-2 no-underline">
+                <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sunken text-[10px] font-medium text-fg-2">
+                  {initial(run.endUserIdExternal)}
+                </span>
+                <span class="font-mono text-xs">
+                  {run.endUserIdExternal || run.runUid.slice(0, 8)}
+                </span>
+              </a>
+            </td>
+          )}
+          <td data-label="Description" class="max-w-[200px] truncate">
+            {run.promptPreview || '-'}
+          </td>
+          {showAgent && (
+            <td data-label="Agent" class="hidden md:table-cell">
+              {run.agentName ? <AgentBadge name={run.agentName} /> : <span>-</span>}
+            </td>
+          )}
+          <td data-label="Duration" class="hidden font-mono text-xs sm:table-cell">
+            {formatDuration(run.startedAt, run.finishedAt)}
+          </td>
+          <td data-label="Cost" class="font-mono text-xs">
+            {'$' + Number(run.totalCost).toFixed(2)}
+          </td>
+          <td data-label="Rating" class="hidden sm:table-cell">
+            {run.rating ? (
+              <StarRating score={run.rating.score} size={12} />
+            ) : (
+              <span class="text-xs text-fg-3">-</span>
+            )}
+          </td>
+          {showTime && (
+            <td data-label="Time" class="hidden font-mono text-xs lg:table-cell">
+              {run.createdAt ? timeAgo(run.createdAt) : '-'}
+            </td>
+          )}
+        </tr>
+      ))}
+    </DataTable>
+  ) : (
+    <p class="py-8 text-center text-sm text-fg-2">{emptyMessage}</p>
+  )
+}

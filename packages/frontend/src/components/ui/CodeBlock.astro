@@ -1,0 +1,183 @@
+---
+import { Code } from 'astro:components';
+
+type CodeLanguage = 'json' | 'ts' | 'js' | 'bash' | 'txt';
+
+interface Props {
+  code?: string;
+  lang?: CodeLanguage;
+  label?: string;
+  editable?: boolean;
+  textareaId?: string;
+  name?: string;
+  rows?: number;
+  placeholder?: string;
+  describedBy?: string;
+  required?: boolean;
+  readonly?: boolean;
+  class?: string;
+}
+
+const {
+  code = '',
+  lang = 'json',
+  label,
+  editable = false,
+  textareaId,
+  name,
+  rows = 12,
+  placeholder,
+  describedBy,
+  required = false,
+  readonly = false,
+  class: cls = '',
+} = Astro.props;
+
+const codeText = code.trimEnd();
+const languageLabel = label ?? lang.toUpperCase();
+---
+
+<div class={`code-block ${editable ? 'code-block-editable' : ''} ${cls}`} data-code-block>
+  <span class="code-lang">{languageLabel}</span>
+
+  {
+    editable ? (
+      <ms-code-editor class="code-editor-shell" style={`--code-editor-rows: ${rows}`}>
+        <pre class="code-highlight" aria-hidden="true">
+          <code data-code-highlight>{codeText || ' '}</code>
+        </pre>
+        <textarea
+          id={textareaId}
+          name={name}
+          class="code-textarea"
+          rows={rows}
+          placeholder={placeholder}
+          aria-describedby={describedBy}
+          aria-required={required ? 'true' : undefined}
+          required={required}
+          readonly={readonly}
+          spellcheck="false"
+          data-code-textarea
+        >
+          {codeText}
+        </textarea>
+      </ms-code-editor>
+    ) : (
+      <Code code={codeText} lang={lang} theme="github-dark" />
+    )
+  }
+</div>
+
+<script src="../../lib/code-editor.ts"></script>
+
+<style>
+  .code-block {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--ms-border-on-inverse);
+    border-radius: var(--ms-r-sm);
+    background: var(--ms-bg-inverse);
+    color: var(--ms-fg-on-inverse-1);
+  }
+
+  .code-block:focus-within {
+    outline: 2px solid var(--ms-fg-on-inverse-1);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--ms-accent);
+  }
+
+  .code-lang {
+    display: block;
+    padding: var(--ms-space-2) var(--ms-space-3);
+    border-bottom: 1px solid var(--ms-border-on-inverse);
+    color: var(--ms-fg-on-inverse-2);
+    font-family: var(--ms-font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+  }
+
+  :global(.code-block .astro-code) {
+    margin: 0;
+    padding: var(--ms-space-3);
+    overflow-x: auto;
+    background: transparent !important;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    tab-size: 2;
+  }
+
+  :global(.code-block .astro-code code) {
+    font-family: var(--ms-font-mono);
+  }
+
+  .code-editor-shell {
+    display: grid;
+    position: relative;
+    min-height: calc((var(--code-editor-rows) * 1.6em) + (var(--ms-space-3) * 2));
+  }
+
+  .code-highlight,
+  .code-textarea {
+    grid-area: 1 / 1;
+    min-height: calc((var(--code-editor-rows) * 1.6em) + (var(--ms-space-3) * 2));
+    margin: 0;
+    padding: var(--ms-space-3);
+    border: 0;
+    font-family: var(--ms-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    tab-size: 2;
+    white-space: pre-wrap;
+  }
+
+  .code-highlight {
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .code-editor-shell[data-code-editor-ready] .code-highlight {
+    visibility: visible;
+  }
+
+  .code-textarea {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    overflow: hidden;
+    resize: vertical;
+    background: transparent;
+    color: var(--ms-fg-on-inverse-1);
+    caret-color: var(--ms-fg-on-inverse-1);
+    outline: 0;
+  }
+
+  .code-editor-shell[data-code-editor-ready] .code-textarea {
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .code-textarea::placeholder {
+    color: var(--ms-fg-on-inverse-2);
+    opacity: 0.7;
+    -webkit-text-fill-color: var(--ms-fg-on-inverse-2);
+  }
+
+  :global(.code-block .token-key) {
+    color: var(--ms-accent-soft);
+  }
+
+  :global(.code-block .token-string) {
+    color: var(--ms-fg-on-inverse-1);
+  }
+
+  :global(.code-block .token-number),
+  :global(.code-block .token-literal) {
+    color: var(--ms-accent);
+  }
+
+  :global(.code-block .token-punctuation) {
+    color: var(--ms-fg-on-inverse-2);
+  }
+</style>

@@ -1,0 +1,220 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import InsightList from '../components/ui/InsightList.astro';
+import ActivityTable from '../components/ui/ActivityTable.astro';
+import StatTile from '../components/ui/StatTile.astro';
+import Icon from '../components/ui/Icon.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import activity from 'lucide-static/icons/activity.svg?raw';
+import usersIcon from 'lucide-static/icons/users.svg?raw';
+import dollarSign from 'lucide-static/icons/dollar-sign.svg?raw';
+import starIcon from 'lucide-static/icons/star.svg?raw';
+import arrowUpRight from 'lucide-static/icons/arrow-up-right.svg?raw';
+import { gql } from '../lib/graphql';
+
+interface InsightNode {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+}
+
+interface RunNode {
+  id: string;
+  runUid: string;
+  status: string;
+  promptPreview: string;
+  agentName: string;
+  endUserIdExternal: string;
+  totalCost: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  rating: { score: number } | null;
+}
+
+interface DashboardData {
+  insights: { edges: { node: InsightNode }[] };
+  runs: { totalCount: number; edges: { node: RunNode }[] };
+  wallet: { available: string } | null;
+  endUsers: { totalCount: number };
+  ratingStats: { average: number | null };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+
+const { data, errors } = await gql<DashboardData>(
+  `query Dashboard {
+    insights(status: "active", first: 4) {
+      edges { node { id category title body } }
+    }
+    runs(first: 100) {
+      totalCount
+      edges { node {
+        id runUid status promptPreview agentName
+        endUserIdExternal totalCost
+        startedAt finishedAt createdAt
+        rating { score }
+      } }
+    }
+    wallet { available }
+    endUsers(isActive: true, first: 1) { totalCount }
+    ratingStats { average }
+  }`,
+  {},
+  cookie,
+  wsSlug,
+);
+
+const insights = data?.insights?.edges?.map((e) => e.node) ?? [];
+const runs = data?.runs?.edges?.map((e) => e.node) ?? [];
+const recentRuns = runs.slice(0, 8);
+const activeUsers = data?.endUsers?.totalCount ?? 0;
+const balance = Number(data?.wallet?.available ?? 0);
+const avgRating = data?.ratingStats?.average;
+const now = new Date();
+const weekStart = new Date(now);
+weekStart.setHours(0, 0, 0, 0);
+weekStart.setDate(now.getDate() - now.getDay());
+const weekRuns = runs.filter((run) => new Date(run.createdAt) >= weekStart);
+const weeklySpend = weekRuns.reduce((sum, run) => sum + Number(run.totalCost), 0);
+const weeklyUsers = new Set(weekRuns.map((run) => run.endUserIdExternal).filter(Boolean)).size;
+const topbarCredits = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: Number.isInteger(balance) ? 0 : 2,
+  maximumFractionDigits: 2,
+}).format(balance);
+
+const hour = new Date().getHours();
+const greeting = hour < 12 ? 'Good morning.' : hour < 17 ? 'Good afternoon.' : 'Good evening.';
+
+const layout = Astro.locals.layout;
+---
+
+<DashboardLayout
+  title="Dashboard · midsphere"
+  current="overview"
+  credits={topbarCredits}
+  userCount={activeUsers.toLocaleString()}
+>
+  {errors && <ErrorBanner message={errors[0]?.message} />}
+
+  {
+    !errors && layout === 'new' && (
+      <div class="flex flex-col gap-7">
+        <div>
+          <h1 class="text-2xl font-semibold leading-tight tracking-tight text-fg-1">{greeting}</h1>
+          <p class="mt-1 text-sm text-fg-2">A quick read on how your agents are doing this week.</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="card flex items-center gap-3">
+            <Icon svg={activity} size={18} class="shrink-0 text-fg-3" />
+            <div class="min-w-0">
+              <p class="text-xl font-semibold text-fg-1">{weekRuns.length.toLocaleString()}</p>
+              <p class="text-xs text-fg-2">Runs</p>
+            </div>
+          </div>
+          <div class="card flex items-center gap-3">
+            <Icon svg={usersIcon} size={18} class="shrink-0 text-fg-3" />
+            <div class="min-w-0">
+              <p class="text-xl font-semibold text-fg-1">{weeklyUsers.toLocaleString()}</p>
+              <p class="text-xs text-fg-2">Active users</p>
+            </div>
+          </div>
+          <div class="card flex items-center gap-3">
+            <Icon svg={dollarSign} size={18} class="shrink-0 text-fg-3" />
+            <div class="min-w-0">
+              <p class="text-xl font-semibold text-fg-1">{'$' + weeklySpend.toFixed(2)}</p>
+              <p class="text-xs text-fg-2">Spend</p>
+            </div>
+          </div>
+          <div class="card flex items-center gap-3">
+            <Icon svg={starIcon} size={18} class="shrink-0 text-fg-3" />
+            <div class="min-w-0">
+              <p class="text-xl font-semibold text-fg-1">
+                {avgRating != null ? avgRating.toFixed(1) : '—'}
+              </p>
+              <p class="text-xs text-fg-2">Avg rating</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-base font-medium text-fg-1">Recent activity</h2>
+            <a
+              href="/runs"
+              class="inline-flex items-center gap-1 text-xs text-fg-2 transition-colors hover:text-fg-1"
+            >
+              View all
+              <Icon svg={arrowUpRight} size={12} />
+            </a>
+          </div>
+
+          <ActivityTable runs={runs.slice(0, 14)} showAgent />
+        </div>
+      </div>
+    )
+  }
+
+  {
+    !errors && layout !== 'new' && (
+      <div class="grid grid-cols-1 gap-10 lg:grid-cols-[5fr_7fr] lg:gap-14">
+        {/* Left column: greeting + insights */}
+        <div class="flex flex-col gap-6">
+          <div>
+            <h1 class="text-[2rem] font-semibold leading-tight tracking-tight text-fg-1">
+              {greeting}
+            </h1>
+            <p class="mt-2 text-sm text-fg-2">Here's what I noticed today</p>
+          </div>
+
+          <InsightList insights={insights} />
+        </div>
+
+        {/* Right column: stats + recent activity */}
+        <div class="flex flex-col gap-8">
+          <div>
+            <p class="mb-4 text-xs font-medium uppercase tracking-wider text-fg-3">This week</p>
+            <div class="grid grid-cols-3 gap-6 sm:grid-cols-4">
+              <StatTile label="Runs">
+                <Icon slot="icon" svg={activity} size={16} class="text-fg-3" />
+                {weekRuns.length.toLocaleString()}
+              </StatTile>
+              <StatTile label="Active users">
+                <Icon slot="icon" svg={usersIcon} size={16} class="text-fg-3" />
+                {weeklyUsers.toLocaleString()}
+              </StatTile>
+              <StatTile label="Spend">
+                <Icon slot="icon" svg={dollarSign} size={16} class="text-fg-3" />
+                {'$' + weeklySpend.toFixed(2)}
+              </StatTile>
+              <StatTile label="Avg rating" class="hidden sm:flex">
+                <Icon slot="icon" svg={starIcon} size={16} class="text-fg-3" />
+                {avgRating != null ? avgRating.toFixed(1) : '—'}
+              </StatTile>
+            </div>
+          </div>
+
+          <div>
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-base font-medium text-fg-1">Recent activity</h2>
+              <a
+                href="/runs"
+                class="inline-flex items-center gap-1 text-xs text-fg-2 transition-colors hover:text-fg-1"
+              >
+                View all
+                <Icon svg={arrowUpRight} size={12} />
+              </a>
+            </div>
+
+            <ActivityTable runs={recentRuns} showAgent />
+          </div>
+        </div>
+      </div>
+    )
+  }
+</DashboardLayout>

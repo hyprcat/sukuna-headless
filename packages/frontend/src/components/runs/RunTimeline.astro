@@ -1,0 +1,148 @@
+---
+import CodeBlock from '../ui/CodeBlock.astro';
+import { eventLabel, eventContent, eventDotTone } from '../../lib/run-events';
+import type { RunEvent } from '../../lib/run-events';
+
+interface Props {
+  events: RunEvent[];
+}
+
+const { events } = Astro.props;
+---
+
+<main class="run-timeline" aria-label="Event timeline" data-run-timeline>
+  {events.length === 0 && <p class="timeline-empty">No events recorded for this run yet.</p>}
+  {
+    events.map((event) => {
+      const content = eventContent(event);
+      const tone = eventDotTone(event.eventType);
+      return (
+        <div class="timeline-event">
+          <div class="timeline-connector" aria-hidden="true">
+            <span class:list={['timeline-dot', `dot-${tone}`]} />
+            <span class="timeline-line" />
+          </div>
+          <div class="timeline-content">
+            <h3 class:list={['timeline-label', content.isError && 'text-err']}>
+              {eventLabel(event)}
+            </h3>
+            {content.meta && <p class="timeline-meta">{content.meta}</p>}
+            {content.code && (
+              <CodeBlock code={content.code} lang="json" label={content.codeLabel} />
+            )}
+            {content.text && (
+              <p class:list={['timeline-text', content.isError && 'text-err font-mono']}>
+                {content.text}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    })
+  }
+</main>
+
+<style>
+  .run-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .timeline-empty {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+  }
+
+  .timeline-event {
+    display: flex;
+    gap: var(--ms-space-4);
+    padding-bottom: var(--ms-space-6);
+  }
+
+  .timeline-event:last-child {
+    padding-bottom: 0;
+  }
+
+  .timeline-event:last-child .timeline-line {
+    display: none;
+  }
+
+  .timeline-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 16px;
+    padding-top: 6px;
+  }
+
+  /* Functional category indicators (event kind), not brand accents. */
+  .timeline-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ms-fg-3);
+    flex-shrink: 0;
+  }
+
+  .dot-ok {
+    background: var(--ms-ok);
+  }
+  .dot-info {
+    background: #3b6ea5;
+  }
+  .dot-tool {
+    background: #c2691f;
+  }
+  .dot-hitl {
+    background: var(--ms-warn);
+  }
+  .dot-artifact {
+    background: #7a5ea5;
+  }
+  .dot-usage {
+    background: var(--ms-fg-3);
+  }
+  .dot-err {
+    background: var(--ms-err);
+  }
+  .dot-muted {
+    background: var(--ms-fg-3);
+  }
+
+  .timeline-line {
+    width: 1px;
+    flex: 1;
+    background: var(--ms-border-subtle);
+    margin-top: var(--ms-space-2);
+  }
+
+  .timeline-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .timeline-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+  }
+
+  .timeline-meta {
+    font-size: 0.75rem;
+    color: var(--ms-fg-3);
+    font-family: var(--ms-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeline-text {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+</style>

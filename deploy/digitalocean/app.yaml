@@ -1,0 +1,635 @@
+# DigitalOcean App Platform specification for midsphere.
+#
+# Deploy:
+#   doctl apps create --spec deploy/digitalocean/app.yaml
+#
+# Update:
+#   doctl apps update <app-id> --spec deploy/digitalocean/app.yaml
+#
+# Before first deploy:
+#   1. Replace the github source blocks with your repository owner/name.
+#   2. Set all SECRET-typed env vars via the DigitalOcean dashboard.
+#   3. Create a DigitalOcean Spaces bucket and set the SPACES_* vars.
+#   4. Set ALLOWED_HOSTS / CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS
+#      to include your domain (JSON arrays, e.g. '["app.midsphere.ai"]').
+#   5. Configure Dodo Payments products in the Dodo dashboard, then set
+#      DODO_CREDIT_PRODUCT_IDS as a JSON dict mapping amount strings to
+#      product IDs (e.g. '{"20.00": "pdt_xxx", "50.00": "pdt_yyy"}').
+#
+# Architecture:
+#   - backend: Django 6 ASGI via Uvicorn (control plane, GraphQL, admin)
+#   - frontend: Astro 5 SSR via Node standalone adapter
+#   - worker: django-tasks database worker (async task processing)
+#   - beat: Celery beat + worker (periodic jobs: credit refresh, reconcile, schedule tick)
+#   - migrate: PRE_DEPLOY job (migrations + collectstatic, runs once per deploy)
+#   - db: Managed PostgreSQL 16
+#   - cache: Managed Redis 7
+#
+# Managed storage:
+#   DigitalOcean Spaces (S3-compatible) handles uploaded knowledge files,
+#   collected static files, and media. Configured via SPACES_* env vars.
+#   Do NOT rely on container filesystem persistence.
+
+name: midsphere
+region: nyc
+
+ingress:
+  rules:
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /admin
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /graphql
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /webhooks
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /healthz
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /readyz
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /auth
+    - component:
+        name: backend
+      match:
+        path:
+          prefix: /api
+    - component:
+        name: frontend
+      match:
+        path:
+          prefix: /
+
+services:
+  - name: backend
+    github:
+      repo: Midsphere-AI/sukuna-headless
+      branch: main
+      deploy_on_push: true
+    source_dir: packages/backend
+    dockerfile_path: Dockerfile
+    http_port: 8000
+    instance_size_slug: professional-xs
+    instance_count: 1
+    health_check:
+      http_path: /healthz
+      initial_delay_seconds: 15
+      period_seconds: 10
+      timeout_seconds: 5
+      failure_threshold: 3
+    envs:
+      # -- Service profile --
+      - key: SERVICE_TYPE
+        value: "web"
+        scope: RUN_TIME
+      - key: PORT
+        value: "8000"
+        scope: RUN_TIME
+
+      # -- Django core --
+      - key: ENVIRONMENT
+        value: "prod"
+        scope: RUN_TIME
+      - key: SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: ALLOWED_HOSTS
+        type: SECRET
+        scope: RUN_TIME
+      - key: FRONTEND_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+
+      # -- Database + cache (managed by App Platform) --
+      - key: DATABASE_URL
+        value: "${db.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: REDIS_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: CELERY_BROKER_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+
+      # -- SSL / origins --
+      - key: SECURE_SSL_REDIRECT
+        value: "true"
+        scope: RUN_TIME
+      - key: CORS_ALLOWED_ORIGINS
+        type: SECRET
+        scope: RUN_TIME
+      - key: CSRF_TRUSTED_ORIGINS
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Dodo Payments --
+      - key: DODO_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_WEBHOOK_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_ENVIRONMENT
+        value: "live_mode"
+        scope: RUN_TIME
+      - key: DODO_RETURN_URL
+        value: "https://${APP_DOMAIN}/billing"
+        scope: RUN_TIME
+      - key: DODO_CANCEL_URL
+        value: "https://${APP_DOMAIN}/billing"
+        scope: RUN_TIME
+      - key: DODO_CREDIT_PRODUCT_IDS
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_CREDIT_ENTITLEMENT_ID
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- DigitalOcean Spaces (S3-compatible object storage) --
+      - key: USE_OBJECT_STORAGE
+        value: "true"
+        scope: RUN_TIME
+      - key: SPACES_BUCKET
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_REGION
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ACCESS_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_CDN_DOMAIN
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- E2B sandbox runtime --
+      - key: E2B_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: E2B_TEMPLATE_ID
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Manifest signing (Ed25519) --
+      - key: MIDSPHERE_MANIFEST_KEY_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: MIDSPHERE_MANIFEST_PRIVATE_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: MANIFEST_EXPIRY_SECONDS
+        value: "300"
+        scope: RUN_TIME
+
+      # -- Capability JWT minting --
+      - key: MIDSPHERE_JWT_KEY_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: MIDSPHERE_JWT_PRIVATE_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: CAPABILITY_TOKEN_TTL_SECONDS
+        value: "1800"
+        scope: RUN_TIME
+
+      # -- Callback ingestion --
+      - key: BACKEND_PUBLIC_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: CALLBACK_INGESTION_PATH
+        value: "/webhooks/sandbox/callbacks"
+        scope: RUN_TIME
+      - key: FERNET_ENCRYPTION_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Sandbox pool --
+      - key: SANDBOX_POOL_MAX_WARM
+        value: "2"
+        scope: RUN_TIME
+      - key: SANDBOX_POOL_MAX_PER_AGENT
+        value: "5"
+        scope: RUN_TIME
+      - key: SANDBOX_MAX_IDLE_SECONDS
+        value: "600"
+        scope: RUN_TIME
+      - key: SANDBOX_GRACE_PERIOD_SECONDS
+        value: "60"
+        scope: RUN_TIME
+
+      # -- HITL + housekeeping --
+      - key: HITL_TIMEOUT_SECONDS
+        value: "300"
+        scope: RUN_TIME
+      - key: SANDBOX_DOMAIN
+        value: "run.midsphere.com"
+        scope: RUN_TIME
+
+      # -- Telemetry --
+      - key: SENTRY_DSN
+        type: SECRET
+        scope: RUN_TIME
+      - key: POSTHOG_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+
+  - name: frontend
+    github:
+      repo: Midsphere-AI/sukuna-headless
+      branch: main
+      deploy_on_push: true
+    source_dir: packages/frontend
+    dockerfile_path: Dockerfile
+    http_port: 4321
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      # -- Build-time (Astro inlines PUBLIC_* at build) --
+      - key: PUBLIC_MS_TELEMETRY
+        value: "on"
+        scope: BUILD_TIME
+      - key: PUBLIC_MS_SENTRY_DSN
+        type: SECRET
+        scope: BUILD_TIME
+      - key: PUBLIC_MS_POSTHOG_KEY
+        type: SECRET
+        scope: BUILD_TIME
+      - key: PUBLIC_MS_POSTHOG_HOST
+        value: "https://us.i.posthog.com"
+        scope: BUILD_TIME
+      - key: PUBLIC_MS_API_URL
+        value: "https://${APP_DOMAIN}"
+        scope: BUILD_TIME
+      - key: PUBLIC_ENVIRONMENT
+        value: "prod"
+        scope: BUILD_TIME
+      - key: PUBLIC_RELEASE
+        value: "${_self.COMMIT_HASH}"
+        scope: BUILD_TIME
+
+      # -- Runtime (Astro SSR) --
+      - key: API_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: CLIENT_API_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: HOST
+        value: "0.0.0.0"
+        scope: RUN_TIME
+      - key: PORT
+        value: "4321"
+        scope: RUN_TIME
+
+workers:
+  - name: worker
+    github:
+      repo: Midsphere-AI/sukuna-headless
+      branch: main
+      deploy_on_push: true
+    source_dir: packages/backend
+    dockerfile_path: Dockerfile
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      - key: SERVICE_TYPE
+        value: "worker"
+        scope: RUN_TIME
+      - key: ENVIRONMENT
+        value: "prod"
+        scope: RUN_TIME
+      - key: SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: ALLOWED_HOSTS
+        type: SECRET
+        scope: RUN_TIME
+      - key: FRONTEND_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: DATABASE_URL
+        value: "${db.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: REDIS_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: CELERY_BROKER_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: SECURE_SSL_REDIRECT
+        value: "false"
+        scope: RUN_TIME
+      - key: CORS_ALLOWED_ORIGINS
+        type: SECRET
+        scope: RUN_TIME
+      - key: CSRF_TRUSTED_ORIGINS
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_WEBHOOK_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_ENVIRONMENT
+        value: "live_mode"
+        scope: RUN_TIME
+      - key: DODO_RETURN_URL
+        value: "https://${APP_DOMAIN}/billing"
+        scope: RUN_TIME
+      - key: DODO_CANCEL_URL
+        value: "https://${APP_DOMAIN}/billing"
+        scope: RUN_TIME
+      - key: DODO_CREDIT_PRODUCT_IDS
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_CREDIT_ENTITLEMENT_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: USE_OBJECT_STORAGE
+        value: "true"
+        scope: RUN_TIME
+      - key: SPACES_BUCKET
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_REGION
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ACCESS_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_CDN_DOMAIN
+        type: SECRET
+        scope: RUN_TIME
+      # -- E2B sandbox runtime --
+      - key: E2B_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: E2B_TEMPLATE_ID
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Manifest signing (Ed25519) --
+      - key: MIDSPHERE_MANIFEST_KEY_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: MIDSPHERE_MANIFEST_PRIVATE_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Capability JWT minting --
+      - key: MIDSPHERE_JWT_KEY_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: MIDSPHERE_JWT_PRIVATE_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Callback ingestion --
+      - key: BACKEND_PUBLIC_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: FERNET_ENCRYPTION_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Sandbox pool --
+      - key: SANDBOX_DOMAIN
+        value: "run.midsphere.com"
+        scope: RUN_TIME
+
+      - key: SENTRY_DSN
+        type: SECRET
+        scope: RUN_TIME
+      - key: POSTHOG_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+
+  - name: beat
+    github:
+      repo: Midsphere-AI/sukuna-headless
+      branch: main
+      deploy_on_push: true
+    source_dir: packages/backend
+    dockerfile_path: Dockerfile
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      - key: SERVICE_TYPE
+        value: "beat"
+        scope: RUN_TIME
+      - key: ENVIRONMENT
+        value: "prod"
+        scope: RUN_TIME
+      - key: SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: ALLOWED_HOSTS
+        type: SECRET
+        scope: RUN_TIME
+      - key: FRONTEND_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: DATABASE_URL
+        value: "${db.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: REDIS_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: CELERY_BROKER_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: SECURE_SSL_REDIRECT
+        value: "false"
+        scope: RUN_TIME
+      - key: CORS_ALLOWED_ORIGINS
+        type: SECRET
+        scope: RUN_TIME
+      - key: CSRF_TRUSTED_ORIGINS
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_WEBHOOK_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_ENVIRONMENT
+        value: "live_mode"
+        scope: RUN_TIME
+      - key: DODO_RETURN_URL
+        value: "https://${APP_DOMAIN}/billing"
+        scope: RUN_TIME
+      - key: DODO_CANCEL_URL
+        value: "https://${APP_DOMAIN}/billing"
+        scope: RUN_TIME
+      - key: DODO_CREDIT_PRODUCT_IDS
+        type: SECRET
+        scope: RUN_TIME
+      - key: DODO_CREDIT_ENTITLEMENT_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: USE_OBJECT_STORAGE
+        value: "true"
+        scope: RUN_TIME
+      - key: SPACES_BUCKET
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_REGION
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ACCESS_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_CDN_DOMAIN
+        type: SECRET
+        scope: RUN_TIME
+      # -- E2B sandbox runtime --
+      - key: E2B_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: E2B_TEMPLATE_ID
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Manifest signing (Ed25519) --
+      - key: MIDSPHERE_MANIFEST_KEY_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: MIDSPHERE_MANIFEST_PRIVATE_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Capability JWT minting --
+      - key: MIDSPHERE_JWT_KEY_ID
+        type: SECRET
+        scope: RUN_TIME
+      - key: MIDSPHERE_JWT_PRIVATE_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Callback ingestion --
+      - key: BACKEND_PUBLIC_URL
+        value: "https://${APP_DOMAIN}"
+        scope: RUN_TIME
+      - key: FERNET_ENCRYPTION_KEY
+        type: SECRET
+        scope: RUN_TIME
+
+      # -- Sandbox pool --
+      - key: SANDBOX_DOMAIN
+        value: "run.midsphere.com"
+        scope: RUN_TIME
+
+      - key: SENTRY_DSN
+        type: SECRET
+        scope: RUN_TIME
+      - key: POSTHOG_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: Midsphere-AI/sukuna-headless
+      branch: main
+    source_dir: packages/backend
+    dockerfile_path: Dockerfile
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      - key: SERVICE_TYPE
+        value: "migrate"
+        scope: RUN_TIME
+      - key: ENVIRONMENT
+        value: "prod"
+        scope: RUN_TIME
+      - key: SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: ALLOWED_HOSTS
+        type: SECRET
+        scope: RUN_TIME
+      - key: DATABASE_URL
+        value: "${db.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: REDIS_URL
+        value: "${cache.DATABASE_URL}"
+        scope: RUN_TIME
+      - key: USE_OBJECT_STORAGE
+        value: "true"
+        scope: RUN_TIME
+      - key: SPACES_BUCKET
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_REGION
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ENDPOINT
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_ACCESS_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SPACES_CDN_DOMAIN
+        type: SECRET
+        scope: RUN_TIME
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    production: true
+    db_name: sukuna
+    db_user: sukuna
+  - name: cache
+    engine: REDIS
+    version: "7"
+    production: true

@@ -1,0 +1,60 @@
+---
+import InsightCard from './InsightCard.astro';
+import Icon from './Icon.astro';
+import zap from 'lucide-static/icons/zap.svg?raw';
+import trendingUp from 'lucide-static/icons/trending-up.svg?raw';
+import alertTriangle from 'lucide-static/icons/alert-triangle.svg?raw';
+import clock from 'lucide-static/icons/clock.svg?raw';
+import { CATEGORY_ACTIONS } from '../../lib/insight-categories';
+
+interface Insight {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+}
+
+interface Props {
+  insights: Insight[];
+  emptyMessage?: string;
+}
+
+const CATEGORY_ICON: Record<string, string> = {
+  capability_gap: zap,
+  tier_optimization: trendingUp,
+  quality_issue: alertTriangle,
+  scheduled_task_health: clock,
+};
+
+const {
+  insights,
+  emptyMessage = "No active insights right now. I'll start surfacing patterns once there's enough activity.",
+} = Astro.props;
+---
+
+{
+  insights.length > 0 ? (
+    <div class="flex flex-col gap-3">
+      {insights.map((insight) => {
+        const action = CATEGORY_ACTIONS[insight.category];
+        const bodyText = insight.body ? ` ${insight.body}` : '';
+        return (
+          <InsightCard actionHref={action?.href} actionLabel={action?.label}>
+            <Icon
+              slot="icon"
+              svg={CATEGORY_ICON[insight.category] ?? zap}
+              size={16}
+              class="text-fg-1"
+            />
+            <span>
+              <strong class="text-fg-1">{insight.title}</strong>
+              {bodyText}
+            </span>
+          </InsightCard>
+        );
+      })}
+    </div>
+  ) : (
+    <p class="text-sm text-fg-2">{emptyMessage}</p>
+  )
+}

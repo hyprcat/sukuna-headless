@@ -1,0 +1,53 @@
+---
+import Icon from '../ui/Icon.astro';
+import home from 'lucide-static/icons/home.svg?raw';
+import circlePlay from 'lucide-static/icons/circle-play.svg?raw';
+import usersIcon from 'lucide-static/icons/users.svg?raw';
+import settingsIcon from 'lucide-static/icons/settings.svg?raw';
+
+interface Props {
+  current: string;
+}
+
+const { current } = Astro.props;
+
+const MOBILE_TABS = [
+  { id: 'overview', label: 'Home', href: '/dashboard', icon: home },
+  { id: 'runs', label: 'Runs', href: '/runs', icon: circlePlay },
+  { id: 'end-users', label: 'End Users', href: '/end-users', icon: usersIcon },
+  { id: 'settings', label: 'Settings', href: '/settings', icon: settingsIcon },
+] as const;
+---
+
+<nav
+  class="fixed bottom-0 left-0 right-0 z-40 bg-canvas border-t border-border-subtle pb-[env(safe-area-inset-bottom,0px)] lg:hidden"
+  aria-label="Mobile navigation"
+>
+  <div class="grid grid-cols-4">
+    {
+      MOBILE_TABS.map((item) => {
+        const isActive = current === item.id || (item.id === 'overview' && current === 'dashboard');
+        return (
+          <a
+            href={item.href}
+            aria-current={isActive ? 'page' : undefined}
+            class:list={[
+              'group flex min-h-[72px] flex-col items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-medium motion-safe:transition-colors motion-safe:duration-150',
+              isActive ? 'text-accent-ink' : 'text-fg-2 hover:text-fg-1',
+            ]}
+          >
+            <span
+              class:list={[
+                'flex h-9 w-9 items-center justify-center rounded-[14px] text-current motion-safe:transition-colors motion-safe:duration-150',
+                isActive ? 'bg-accent shadow-1' : 'bg-transparent group-hover:bg-sunken',
+              ]}
+            >
+              <Icon svg={item.icon} size={22} />
+            </span>
+            <span class="leading-none whitespace-nowrap">{item.label}</span>
+          </a>
+        );
+      })
+    }
+  </div>
+</nav>

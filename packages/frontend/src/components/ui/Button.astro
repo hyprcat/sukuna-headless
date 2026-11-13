@@ -1,0 +1,36 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+type Variant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger';
+
+interface Props extends HTMLAttributes<'button'> {
+  href?: string;
+  type?: 'button' | 'submit' | 'reset';
+  variant?: Variant;
+  full?: boolean;
+  class?: string;
+}
+
+const {
+  href,
+  type = 'button',
+  variant = 'primary',
+  full = false,
+  class: cls = '',
+  ...rest
+} = Astro.props;
+
+const className = ['btn', `btn-${variant}`, full ? 'btn-full' : '', cls].filter(Boolean).join(' ');
+---
+
+{
+  href ? (
+    <a href={href} class={className}>
+      <slot />
+    </a>
+  ) : (
+    <button type={type} class={className} {...rest}>
+      <slot />
+    </button>
+  )
+}

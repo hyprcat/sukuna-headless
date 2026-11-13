@@ -1,0 +1,267 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Button from '../components/ui/Button.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import ErrorBanner from '../components/ui/ErrorBanner.astro';
+import ProgressBar from '../components/ui/ProgressBar.astro';
+import InsightFeedItem from '../components/insights/InsightFeedItem.astro';
+import InsightsSidebar from '../components/insights/InsightsSidebar.astro';
+import ActivityDoodle from '../components/doodles/ActivityDoodle.astro';
+import { CATEGORY_LABELS } from '../lib/insight-categories';
+import { gql } from '../lib/graphql';
+import { currentRole, canAction, Action } from '../lib/permissions';
+import { clientApiUrl } from '../lib/api';
+
+if (Astro.locals.layout === 'new') return Astro.redirect('/dashboard');
+
+interface InsightNode {
+  id: string;
+  category: string;
+  title: string;
+  body: string;
+  status: string;
+  createdAt: string;
+  affectedAgentIds: number[];
+  affectedRunIds: string[];
+  affectedEndUserIds: number[];
+}
+
+interface CategoryCount {
+  category: string;
+  count: number;
+}
+
+interface InsightSummary {
+  totalActive: number;
+  totalPinned: number;
+  byCategory: CategoryCount[];
+}
+
+interface InsightsPageData {
+  insights: { edges: { node: InsightNode }[] };
+  dismissedInsights: { totalCount: number };
+  insightSummary: InsightSummary;
+  runs: { totalCount: number };
+}
+
+const cookie = Astro.request.headers.get('cookie') ?? '';
+const wsSlug = Astro.locals.workspaceSlug ?? undefined;
+const apiUrl = clientApiUrl;
+const requestedStatus = Astro.url.searchParams.get('status');
+const selectedStatus = requestedStatus === 'dismissed' ? 'dismissed' : null;
+const showingDismissed = selectedStatus === 'dismissed';
+
+const { data, errors } = await gql<InsightsPageData>(
+  `query InsightsPage($status: String) {
+    insights(first: 100, status: $status) {
+      edges { node {
+        id category title body status createdAt
+        affectedAgentIds affectedRunIds affectedEndUserIds
+      } }
+    }
+    dismissedInsights: insights(status: "dismissed", first: 1) {
+      totalCount
+    }
+    insightSummary {
+      totalActive totalPinned
+      byCategory { category count }
+    }
+    runs(first: 1) { totalCount }
+  }`,
+  { status: selectedStatus },
+  cookie,
+  wsSlug,
+);
+
+const insights = data?.insights?.edges?.map((e) => e.node) ?? [];
+const summary = data?.insightSummary ?? { totalActive: 0, totalPinned: 0, byCategory: [] };
+const hasError = !!errors;
+const runCount = data?.runs?.totalCount ?? 0;
+const insightRunThreshold = 50;
+
+const role = currentRole(Astro.locals.workspaces, Astro.locals.workspaceSlug);
+const canDismissInsights = canAction(role, Action.INSIGHTS_DISMISS);
+const canPinInsights = canAction(role, Action.INSIGHTS_PIN);
+
+const dismissedCount = data?.dismissedInsights?.totalCount ?? 0;
+const feedInsights = showingDismissed ? insights : insights.filter((i) => i.status !== 'dismissed');
+const categoryKeys = Object.keys(CATEGORY_LABELS);
+---
+
+<DashboardLayout title="Insights · midsphere" current="insights">
+  <div id="api-config" data-url={apiUrl} data-ws={wsSlug ?? ''} hidden></div>
+
+  {hasError && <ErrorBanner message={errors![0]?.message} />}
+
+  {
+    !hasError && !showingDismissed && feedInsights.length === 0 && (
+      <EmptyState
+        heading="Nothing to report yet"
+        body={`I'll start surfacing patterns once your agents have <span class="hl">${insightRunThreshold}+ runs</span>. You're at ${runCount}.`}
+      >
+        <ActivityDoodle size={64} slot="doodle" />
+        <div class="insight-progress">
+          <span>
+            {runCount.toLocaleString()} / {insightRunThreshold}
+          </span>
+          <ProgressBar
+            name="Insight readiness"
+            value={runCount}
+            max={insightRunThreshold}
+            ariaValueText={`${runCount.toLocaleString()} of ${insightRunThreshold} runs`}
+          />
+          <span>{insightRunThreshold}</span>
+        </div>
+        <Button variant="accent" href="/runs">
+          View runs
+        </Button>
+      </EmptyState>
+    )
+  }
+
+  {
+    !hasError && showingDismissed && feedInsights.length === 0 && (
+      <EmptyState
+        heading="No dismissed insights"
+        body='Dismissed patterns will appear here after you <span class="hl">action insights</span>.'
+      >
+        <ActivityDoodle size={64} slot="doodle" />
+        <Button variant="accent" href="/insights">
+          View active insights
+        </Button>
+      </EmptyState>
+    )
+  }
+
+  {
+    !hasError && feedInsights.length > 0 && (
+      <div class="insights-layout">
+        <div class="insights-main">
+          <div class="insights-header">
+            <div>
+              <h1 class="text-xl font-semibold tracking-tight text-fg-1">
+                <span class="hl">Insights</span>
+              </h1>
+              <p class="insights-subtitle">Everything I've noticed</p>
+            </div>
+          </div>
+
+          <div class="insights-toolbar">
+            <div class="filter-pills" role="radiogroup" aria-label="Filter insights by category">
+              <button
+                type="button"
+                class="pill pill-active"
+                role="radio"
+                aria-checked="true"
+                data-category="all"
+              >
+                All
+              </button>
+              {categoryKeys.map((key) => (
+                <button
+                  type="button"
+                  class="pill"
+                  role="radio"
+                  aria-checked="false"
+                  data-category={key}
+                >
+                  {CATEGORY_LABELS[key]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div class="insight-feed" id="insight-feed">
+            {feedInsights.map((insight) => (
+              <InsightFeedItem
+                id={insight.id}
+                category={insight.category}
+                title={insight.title}
+                body={insight.body}
+                status={insight.status}
+                createdAt={insight.createdAt}
+                affectedAgentIds={insight.affectedAgentIds}
+                affectedRunIds={insight.affectedRunIds}
+                affectedEndUserIds={insight.affectedEndUserIds}
+                canDismiss={canDismissInsights}
+                canPin={canPinInsights}
+              />
+            ))}
+          </div>
+
+          <p class="item-count" id="insight-count" aria-live="polite" aria-atomic="true">
+            Showing {feedInsights.length} {showingDismissed ? 'dismissed ' : ''}insights
+          </p>
+        </div>
+
+        <InsightsSidebar
+          totalActive={summary.totalActive}
+          totalPinned={summary.totalPinned}
+          totalDismissed={dismissedCount}
+          byCategory={summary.byCategory}
+        />
+      </div>
+    )
+  }
+</DashboardLayout>
+
+<style>
+  .insights-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ms-space-8);
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+
+  .insight-progress {
+    display: grid;
+    grid-template-columns: auto minmax(8rem, 19rem) auto;
+    align-items: center;
+    gap: var(--ms-space-3);
+    width: min(100%, 28rem);
+    color: var(--ms-fg-2);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (min-width: 1024px) {
+    .insights-layout {
+      grid-template-columns: 65fr 35fr;
+    }
+  }
+
+  .insights-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-4);
+  }
+
+  .insights-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ms-space-4);
+  }
+
+  .insights-subtitle {
+    font-size: 0.875rem;
+    color: var(--ms-fg-2);
+    margin-top: 2px;
+  }
+
+  .insights-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--ms-space-3);
+    flex-wrap: wrap;
+  }
+
+  .insight-feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-3);
+  }
+</style>
+
+<script is:inline src="/scripts/insights.js"></script>

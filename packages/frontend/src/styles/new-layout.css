@@ -1,0 +1,50 @@
+/* New layout — modern, compact, flat. Scoped under [data-layout='new'].
+ *
+ * White canvas (no tint), thin borders instead of floating shadows, tighter
+ * padding. Most of the look comes from re-theming the --ms-* tokens, which
+ * every Tailwind utility and .card/.btn/.stat-tile resolves to. These rules are
+ * unlayered, so they beat Tailwind's @layer utilities without !important.
+ * The classic layout is left completely untouched. */
+
+[data-layout='new'] {
+  --ms-r-sm: 8px;
+  --ms-r-md: 12px;
+  --ms-r-lg: 14px;
+  --ms-border-subtle: rgba(17, 17, 17, 0.07);
+  --ms-border-default: rgba(17, 17, 17, 0.12);
+}
+
+/* Cards: flat bordered panels, tighter padding — dense, no float */
+[data-layout='new'] .card {
+  border-color: var(--ms-border-default);
+  border-radius: var(--ms-r-md);
+  box-shadow: none;
+  padding: var(--ms-space-4);
+}
+[data-layout='new'] .card-feature {
+  padding: var(--ms-space-5);
+}
+
+/* Master-detail (Tools, Policies): don't reserve/paint the empty editor box.
+ * Show a full-width list and only reveal the detail column once an editor is
+ * actually open — a card is selected or "New …" is clicked (#editor-panel
+ * loses [hidden]). Kills the empty box on the side. */
+[data-layout='new'] section.master-detail:not(:has(#editor-panel:not([hidden]))) {
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-layout='new']
+  section.master-detail:not(:has(#editor-panel:not([hidden])))
+  > aside.master-detail-panel {
+  display: none;
+}
+
+/* Sidebar active item: rounded neutral-gray pill (no lime fill) */
+[data-layout='new'] aside[aria-label='Sidebar'] nav a {
+  margin: 1px 6px;
+  border-left-color: transparent;
+  border-radius: var(--ms-r-sm);
+}
+[data-layout='new'] aside[aria-label='Sidebar'] nav a[aria-current='page'] {
+  background: var(--ms-bg-sunken);
+  color: var(--ms-fg-1);
+}

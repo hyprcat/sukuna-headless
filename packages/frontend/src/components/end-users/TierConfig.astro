@@ -1,0 +1,172 @@
+---
+
+---
+
+<section class="tier-config" aria-labelledby="tier-config-heading">
+  <h2 id="tier-config-heading" class="text-lg font-semibold tracking-tight text-fg-1">
+    Tier Configuration
+  </h2>
+  <p class="tier-intro">
+    Default limits per tier. Override any value on individual end users above.
+  </p>
+
+  <div class="tier-grid">
+    <div class="tier-col">
+      <h3 class="tier-col-heading">Free</h3>
+      <dl class="tier-dl">
+        <div class="tier-row">
+          <dt>Credits</dt>
+          <dd>10</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Run cap</dt>
+          <dd>5 / day</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Sandbox time</dt>
+          <dd>30s</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Concurrency</dt>
+          <dd>1</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Model tier</dt>
+          <dd>free</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="tier-col">
+      <h3 class="tier-col-heading tier-col-paid">Pro</h3>
+      <dl class="tier-dl">
+        <div class="tier-row">
+          <dt>Credits</dt>
+          <dd>100</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Run cap</dt>
+          <dd>50 / day</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Sandbox time</dt>
+          <dd>120s</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Concurrency</dt>
+          <dd>3</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Model tier</dt>
+          <dd>pro</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="tier-col">
+      <h3 class="tier-col-heading tier-col-paid">Enterprise</h3>
+      <dl class="tier-dl">
+        <div class="tier-row">
+          <dt>Credits</dt>
+          <dd>1,000</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Run cap</dt>
+          <dd>Unlimited</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Sandbox time</dt>
+          <dd>300s</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Concurrency</dt>
+          <dd>10</dd>
+        </div>
+        <div class="tier-row">
+          <dt>Model tier</dt>
+          <dd>enterprise</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+
+  <a href="/settings" class="tier-manage-link"> Manage tiers and limits in Settings </a>
+</section>
+
+<style>
+  .tier-config {
+    margin-top: var(--ms-space-7);
+    padding-top: var(--ms-space-6);
+    border-top: 1px solid var(--ms-border-subtle);
+  }
+
+  .tier-intro {
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    margin-top: var(--ms-space-1);
+    margin-bottom: var(--ms-space-5);
+  }
+
+  .tier-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--ms-space-4);
+  }
+
+  @media (min-width: 768px) {
+    .tier-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .tier-col {
+    border: 1px solid var(--ms-border-subtle);
+    border-radius: var(--ms-r-sm);
+    padding: var(--ms-space-4);
+  }
+
+  .tier-col-heading {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ms-fg-1);
+    margin-bottom: var(--ms-space-3);
+  }
+
+  .tier-col-paid {
+    color: var(--ms-accent-fg);
+  }
+
+  .tier-dl {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ms-space-2);
+  }
+
+  .tier-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8125rem;
+  }
+
+  .tier-row dt {
+    color: var(--ms-fg-2);
+  }
+
+  .tier-row dd {
+    font-weight: 500;
+    color: var(--ms-fg-1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tier-manage-link {
+    display: inline-block;
+    margin-top: var(--ms-space-4);
+    font-size: 0.8125rem;
+    color: var(--ms-fg-2);
+    text-decoration: underline;
+  }
+
+  .tier-manage-link:hover {
+    color: var(--ms-fg-1);
+  }
+</style>

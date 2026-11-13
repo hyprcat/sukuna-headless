@@ -1,0 +1,46 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'div'> {
+  heading: string;
+  body: string;
+  class?: string;
+}
+
+const { heading, body, class: cls = '', ...rest } = Astro.props;
+---
+
+<div class={`empty-state ${cls}`} data-empty-state {...rest}>
+  <div class="empty-doodle">
+    <slot name="doodle" />
+  </div>
+  <h2 class="mt-4 text-lg font-medium tracking-tight text-fg-1">{heading}</h2>
+  <p class="mt-2 max-w-sm text-sm text-fg-2" set:html={body} />
+  <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--ms-space-9) 0;
+    text-align: center;
+  }
+
+  .empty-doodle {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .empty-doodle :global(svg) {
+    max-width: 100%;
+    max-height: 100%;
+  }
+</style>
